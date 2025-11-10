@@ -1,0 +1,18 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+venv/
+.env/
+.venv/
+
+# IDE / editor stuff (optional but recommended)
+.idea/
+.vscode/
+*.swp
+
+# OS junk files
+.DS_Store
+Thumbs.db
