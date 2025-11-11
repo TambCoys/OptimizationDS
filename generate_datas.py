@@ -57,3 +57,4 @@ def generate_problem(n, K, density=0.01, seed=42, save_dir="problems"):
     np.save(f"{path}_blocks.npy", np.array(blocks, dtype=object))
 
     return Q, q, blocks
+
