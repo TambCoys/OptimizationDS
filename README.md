@@ -2,6 +2,8 @@ Branch per valutare un confronto tra Algorithm 1 ed un solver benchmark su un nu
 
 \\ Istruzioni per l'uso 
 
-\\\ 1) generate_datas.py crea blocchi utili da ottimizzare
-    2) Test_verifica.py ne verifica la validità
-    3)
+1) generate_datas.py crea blocchi utili da ottimizzare
+
+2) Test_verifica.py ne verifica la validità
+    
+3) run_experiments.py restituisce una tabella di confronto tra Algo1 e il benchmark di cvxpy
