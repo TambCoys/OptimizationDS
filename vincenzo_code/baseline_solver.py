@@ -163,3 +163,4 @@ def solve_baseline_scipy(Q, q, blocks):
         "value": float(res.fun) if res.success else np.nan,
         "solve_time": solve_time,
     }
+
