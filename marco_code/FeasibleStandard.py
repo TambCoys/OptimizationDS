@@ -120,7 +120,7 @@ def ipm_simplex_qp(
         info["mu"].append(mu)
 
     else:
-        print(f"⚠️  Warning: raggiunto max_iter={max_iter} senza convergenza.")
+        print(f"Warning: raggiunto max_iter={max_iter} senza convergenza.")
 
     return x, y, z, info
 

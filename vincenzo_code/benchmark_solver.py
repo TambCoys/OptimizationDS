@@ -23,7 +23,7 @@ from block_ops import apply_E
 # Import Marco's algorithm
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'marco_code'))
 try:
-    from FeasibleStandard import ipm_simplex_qp
+    from FeasibleStandard import ipm_simplex_qp # type: ignore
     MARCO_AVAILABLE = True
 except ImportError:
     MARCO_AVAILABLE = False
@@ -121,7 +121,7 @@ def benchmark_solver(solver_func, Q, q, blocks, name, n_runs=1):
             'result': result,
         }
     except Exception as e:
-        print(f"  ❌ Error: {e}")
+        print(f"Error: {e}")
         import traceback
         traceback.print_exc()
         return {
@@ -333,7 +333,7 @@ def main():
             "Algorithm 1 (Marco)", n_runs=args.n_runs
         ))
     else:
-        print("\n⚠️  Skipping Marco's algorithm (not available)")
+        print("\nSkipping Marco's algorithm (not available)")
     
     # Print comparison
     print_comparison_table(results)

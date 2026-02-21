@@ -3,7 +3,6 @@
 This guide explains how to benchmark Algorithm 1 implementations (Vincenzo's and Marco's) against baseline solvers.
 
 ## Quick Start
-
 ### Option 1: Use the dedicated benchmark script (Recommended)
 
 ```bash
@@ -26,7 +25,7 @@ python benchmark_solver.py --sigma 0.1 --max-iter 200
 python run_p34.py
 ```
 
-The `run_p34.py` script now includes timing information and compares your algorithm with baseline solvers.
+The `run_p34.py` script now includes timing information and compares the algorithm with baseline solvers.
 
 ## Benchmark Script Features
 
