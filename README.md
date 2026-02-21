@@ -5,12 +5,14 @@ Implementation of Algorithm 1: Feasible-Start, Fixed σ Interior Point Method fo
 ## Problem Formulation
 
 Solve:
-```
+
+```bash
 min  (1/2) x^T Q x + q^T x
 s.t. Ex = 1,  x >= 0
 ```
 
 where:
+
 - Q is a symmetric positive semidefinite matrix
 - Blocks {I_k} partition indices (simplex constraint per block)
 - E is the block-sum operator (never formed explicitly)
@@ -93,6 +95,7 @@ python run_p34.py
 - scipy >= 1.7.0
 
 Install with:
+
 ```bash
 pip install -r requirements.txt
 ```
@@ -119,4 +122,3 @@ See the LaTeX specification document for full mathematical details. Key points:
    - ||r_P||∞ ≤ ε_feas
    - ||r_D||∞ ≤ ε_feas
    - μ ≤ ε_comp
-

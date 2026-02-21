@@ -8,8 +8,9 @@ import numpy as np
 import scipy.sparse
 import sys
 import time
-from solver_algo1 import FeasibleStartIPM
+from algo1_final_solver import FeasibleStartIPM
 from baseline_solver import solve_baseline_cvxpy, solve_baseline_scipy
+from helper.block_ops import create_example_problem
 
 
 def load_problem_data(Q, q, blocks):
@@ -68,38 +69,6 @@ def load_problem_data(Q, q, blocks):
         raise ValueError(f"Missing indices: {missing}")
     
     return Q, q, blocks
-
-
-def create_example_problem():
-    """
-    Create a simple example problem for testing.
-    
-    Returns:
-    --------
-    Q : ndarray, shape (n, n)
-        Example Q matrix.
-    q : ndarray, shape (n,)
-        Example q vector.
-    blocks : list of lists
-        Example blocks.
-    """
-    # Simple 2-block example
-    # Block 0: indices [0, 1, 2]
-    # Block 1: indices [3, 4]
-    n = 5
-    blocks = [[0, 1, 2], [3, 4]]
-    
-    # Create a simple positive semidefinite Q
-    np.random.seed(42)
-    Q = np.random.randn(n, n)
-    Q = Q.T @ Q  # Make it PSD
-    Q = Q + 0.1 * np.eye(n)  # Make it strictly positive definite
-    
-    # Create q
-    q = np.random.randn(n)
-    
-    return Q, q, blocks
-
 
 def print_summary(result):
     """
@@ -184,7 +153,7 @@ def main():
         print(f"Solution x: {baseline_result['x']}")
         
         # Check feasibility
-        from block_ops import apply_E
+        from final_code.helper.block_ops import apply_E
         Ex_baseline = apply_E(baseline_result['x'], blocks)
         print(f"Feasibility check: Ex = {Ex_baseline}")
         print(f"Non-negativity: min(x) = {np.min(baseline_result['x']):.6e}")
@@ -206,7 +175,7 @@ def main():
         print(f"Solution x: {scipy_result['x']}")
         
         # Check feasibility
-        from block_ops import apply_E
+        from final_code.helper.block_ops import apply_E
         Ex_scipy = apply_E(scipy_result['x'], blocks)
         print(f"Feasibility check: Ex = {Ex_scipy}")
         print(f"Non-negativity: min(x) = {np.min(scipy_result['x']):.6e}")

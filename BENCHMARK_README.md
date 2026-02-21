@@ -3,6 +3,7 @@
 This guide explains how to benchmark Algorithm 1 implementations (Vincenzo's and Marco's) against baseline solvers.
 
 ## Quick Start
+
 ### Option 1: Use the dedicated benchmark script (Recommended)
 
 ```bash
@@ -40,7 +41,7 @@ The `benchmark_solver.py` script provides:
 
 ## Command-Line Options
 
-```
+```bash
 --n           Problem size (number of variables, default: 20)
 --n-blocks    Number of blocks (default: 3)
 --n-runs      Number of runs for timing (default: 1, use >1 for statistics)
@@ -51,7 +52,7 @@ The `benchmark_solver.py` script provides:
 
 ## Example Output
 
-```
+```bash
 ====================================================================================================
 BENCHMARK RESULTS SUMMARY
 ====================================================================================================
@@ -100,11 +101,12 @@ Baseline objective: 1.2345678901e+00
 ## Comparing Implementations
 
 The benchmark now includes both Algorithm 1 implementations:
+
 - **Vincenzo's**: Uses M formulation, operator form, supports sparse matrices
 - **Marco's**: Uses H formulation, explicit matrices, simpler implementation
 
 Both should produce similar results, but may differ in:
+
 - **Performance**: Different formulations may have different computational costs
 - **Numerical stability**: M formulation (Vincenzo) avoids explicit division by x
 - **Scalability**: Operator form (Vincenzo) is better for large problems
-

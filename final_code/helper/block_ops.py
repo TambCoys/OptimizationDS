@@ -101,3 +101,57 @@ def validate_blocks(blocks, n):
     
     return True, None
 
+
+import numpy as np
+
+def create_example_problem(n=10, n_blocks=3, seed=42):
+    """
+    Create a randomly generated example problem with a block partition.
+    
+    Parameters:
+    -----------
+    n : int, optional
+        Total dimension of the problem (default is 10).
+    n_blocks : int, optional
+        Number of blocks to partition the indices into (default is 3).
+    seed : int, optional
+        Random seed for reproducibility (default is 42).
+    
+    Returns:
+    --------
+    Q : numpy.ndarray
+        A strictly positive definite symmetric matrix of shape (n, n).
+    q : numpy.ndarray
+        A random 1D array (vector) of length n.
+    blocks : list of lists
+        A disjoint partition of indices {0, ..., n-1} into n_blocks blocks.
+    """
+
+    # Simple 2-block example
+    # Block 0: indices [0, 1, 2]
+    # Block 1: indices [3, 4]
+    # n = 5
+    # blocks = [[0, 1, 2], [3, 4]]
+
+    np.random.seed(seed)
+    
+    # Create blocks (roughly equal size)
+    block_size = n // n_blocks
+    blocks = []
+    for k in range(n_blocks):
+        start_idx = k * block_size
+        if k == n_blocks - 1:
+            end_idx = n
+        else:
+            end_idx = (k + 1) * block_size
+        blocks.append(list(range(start_idx, end_idx)))
+    
+    # Create positive semidefinite Q
+    Q = np.random.randn(n, n)
+    Q = Q.T @ Q  # Make it PSD
+    Q = Q + 0.1 * np.eye(n)  # Make it strictly positive definite
+    
+    # Create q
+    q = np.random.randn(n)
+    
+    return Q, q, blocks

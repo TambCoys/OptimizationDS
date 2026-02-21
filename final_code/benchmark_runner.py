@@ -2,8 +2,8 @@
 Benchmark script: Compare Algorithm 1 implementations vs Baseline solvers.
 
 Compares:
-- Algorithm 1 (Vincenzo's implementation)
-- Algorithm 1 (Marco's implementation)
+- Algorithm 1 (Final implementation)
+- Algorithm 1 (Baseline implementation)
 - Baseline solvers (CVXPY, SciPy)
 
 Measures:
@@ -16,18 +16,10 @@ import numpy as np
 import time
 import sys
 import os
-from solver_algo1 import FeasibleStartIPM
+from algo1_baseline_solver import ipm_simplex_qp
+from algo1_final_solver import FeasibleStartIPM
 from baseline_solver import solve_baseline_cvxpy, solve_baseline_scipy
-from block_ops import apply_E
-
-# Import Marco's algorithm
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'marco_code'))
-try:
-    from FeasibleStandard import ipm_simplex_qp # type: ignore
-    MARCO_AVAILABLE = True
-except ImportError:
-    MARCO_AVAILABLE = False
-    print("Warning: Marco's algorithm not available. Make sure FeasibleStandard.py is in marco_code/")
+from helper.block_ops import apply_E, create_example_problem
 
 
 def compute_objective(Q, q, x):
@@ -199,32 +191,6 @@ def print_comparison_table(results):
                         print(f"    Solution difference (||x - x_baseline||_inf): {x_diff:.6e}")
 
 
-def create_example_problem(n=10, n_blocks=3, seed=42):
-    """Create an example problem for benchmarking."""
-    np.random.seed(seed)
-    
-    # Create blocks (roughly equal size)
-    block_size = n // n_blocks
-    blocks = []
-    for k in range(n_blocks):
-        start_idx = k * block_size
-        if k == n_blocks - 1:
-            end_idx = n
-        else:
-            end_idx = (k + 1) * block_size
-        blocks.append(list(range(start_idx, end_idx)))
-    
-    # Create positive semidefinite Q
-    Q = np.random.randn(n, n)
-    Q = Q.T @ Q  # Make it PSD
-    Q = Q + 0.1 * np.eye(n)  # Make it strictly positive definite
-    
-    # Create q
-    q = np.random.randn(n)
-    
-    return Q, q, blocks
-
-
 def main():
     """Main benchmarking function."""
     import argparse
@@ -236,6 +202,7 @@ def main():
     parser.add_argument('--seed', type=int, default=42, help='Random seed (default: 42)')
     parser.add_argument('--sigma', type=float, default=0.1, help='Centering parameter (default: 0.1)')
     parser.add_argument('--max-iter', type=int, default=200, help='Max iterations (default: 200)')
+    parser.add_argument('--verbosity', type=int, default=0, help='Verbosity level (default: 0) minimal verbosity for benchmarking')
     
     args = parser.parse_args()
     
@@ -253,29 +220,29 @@ def main():
     
     print(f"\nBlocks: {blocks}")
     
-    # Wrapper for Algorithm 1
-    def solve_algo1(Q, q, blocks):
-        cfg = {
-            'sigma': args.sigma,
-            'max_iter': args.max_iter,
-            'eps_feas': 1e-8,
-            'eps_comp': 1e-8,
-            'verbosity': 0,  # Silent for benchmarking
-        }
-        solver = FeasibleStartIPM(Q, q, blocks, cfg=cfg)
-        result = solver.solve()
-        return result
-    
-    # Wrapper for baseline solvers
+    # Wrapper for math modules baseline solvers
     def solve_baseline_cvxpy_wrapper(Q, q, blocks):
         return solve_baseline_cvxpy(Q, q, blocks)
     
     def solve_baseline_scipy_wrapper(Q, q, blocks):
         return solve_baseline_scipy(Q, q, blocks)
     
-    # Wrapper for Marco's algorithm
-    def solve_marco_wrapper(Q, q, blocks):
-        """Wrapper for Marco's algorithm to match expected format."""
+    # Wrapper for Algorithm 1
+    def solve_final_wrapper(Q, q, blocks):
+        cfg = {
+            'sigma': args.sigma,
+            'max_iter': args.max_iter,
+            'eps_feas': 1e-8,
+            'eps_comp': 1e-8,
+            'verbosity': args.verbosity  # Default to 0 (Silent) for benchmarking
+        }
+        solver = FeasibleStartIPM(Q, q, blocks, cfg=cfg)
+        result = solver.solve()
+        return result
+    
+    # Wrapper for our baseline algorithm
+    def solve_our_baseline_wrapper(Q, q, blocks):
+        """Wrapper for our baseline algorithm to match expected format."""
         x, y, z, info = ipm_simplex_qp(
             Q, q, blocks,
             eps_feas=1e-8,
@@ -320,20 +287,17 @@ def main():
         "Baseline (SciPy)", n_runs=args.n_runs
     ))
     
-    # 3. Algorithm 1 (Vincenzo's implementation)
+    # 3. Algorithm 1 (Final implementation)
     results.append(benchmark_solver(
-        solve_algo1, Q, q, blocks,
-        "Algorithm 1 (Vincenzo)", n_runs=args.n_runs
+        solve_final_wrapper, Q, q, blocks,
+        "Algorithm 1 (Final)", n_runs=args.n_runs
     ))
     
-    # 4. Algorithm 1 (Marco's implementation)
-    if MARCO_AVAILABLE:
-        results.append(benchmark_solver(
-            solve_marco_wrapper, Q, q, blocks,
-            "Algorithm 1 (Marco)", n_runs=args.n_runs
+    # 4. Algorithm 1 (our baseline implementation)
+    results.append(benchmark_solver(
+        solve_our_baseline_wrapper, Q, q, blocks,
+        "Algorithm 1 (baseline)", n_runs=args.n_runs
         ))
-    else:
-        print("\nSkipping Marco's algorithm (not available)")
     
     # Print comparison
     print_comparison_table(results)

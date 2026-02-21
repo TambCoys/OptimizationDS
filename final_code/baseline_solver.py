@@ -40,7 +40,7 @@ def solve_baseline_cvxpy(Q, q, blocks):
     
     Q = np.asarray(Q, dtype=float)
     if scipy.sparse.issparse(Q):
-        Q = Q.toarray()
+        Q = Q.toarray() # type: ignore
     
     # Symmetrize if needed
     if not np.allclose(Q, Q.T):
@@ -109,7 +109,7 @@ def solve_baseline_scipy(Q, q, blocks):
     
     Q = np.asarray(Q, dtype=float)
     if scipy.sparse.issparse(Q):
-        Q = Q.toarray()
+        Q = Q.toarray() # type: ignore
     
     # Symmetrize if needed
     if not np.allclose(Q, Q.T):
