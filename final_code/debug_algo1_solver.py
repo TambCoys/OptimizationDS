@@ -9,7 +9,7 @@ import scipy.sparse
 import sys
 import time
 from algo1_final_solver import FeasibleStartIPM
-from baseline_solver import solve_baseline_cvxpy, solve_baseline_scipy
+from baseline_solvers import solve_baseline_cvxpy, solve_baseline_scipy
 from helper.block_ops import create_example_problem
 
 

@@ -110,7 +110,10 @@ class FeasibleStartIPM:
         mu : float
             Initial complementarity gap.
         """
-        # Step 1: Uniform primal (x^0_i = 1/|I_k| for i in I_k)
+        # ==========================================
+        # Step 1: Initialization (δ-rule)
+        # ==========================================
+        # Step 1.1: Uniform primal (x^0_i = 1/|I_k| for i in I_k)
         x = np.zeros(self.n, dtype=float)
         for k, block in enumerate(self.blocks):
             block_size = len(block)
@@ -118,13 +121,13 @@ class FeasibleStartIPM:
                 raise ValueError(f"Block {k} is empty")
             x[block] = 1.0 / block_size
         
-        # Step 2: Compute w = Q x^0 + q
+        # Step 1.2: Compute w = Q x^0 + q
         if self.is_sparse:
             w = self.Q.dot(x) + self.q
         else:
             w = self.Q @ x + self.q
         
-        # Step 3: Compute per-block δ_k
+        # Step 1.3: Compute per-block δ_k
         delta_per_block = np.zeros(self.n_blocks, dtype=float)
         for k, block in enumerate(self.blocks):
             w_block = w[block]
@@ -134,7 +137,7 @@ class FeasibleStartIPM:
             delta_k = max(self.cfg['eps_delta'], self.cfg['tau_delta'] * w_range)
             delta_per_block[k] = delta_k
         
-        # Step 4: Dual start
+        # Step 1.4: Dual start (y_k = -min(w_Ik) + δ_k, z = w + E^T y)
         y = np.zeros(self.n_blocks, dtype=float)
         z = np.zeros(self.n, dtype=float)
         
@@ -145,7 +148,7 @@ class FeasibleStartIPM:
             y[k] = -w_min + delta_k
             z[block] = w[block] + y[k]
         
-        # Step 5: Compute initial gap
+        # Step 1.5: Compute initial gap
         mu = np.dot(x, z) / self.n
         
         # Sanity checks
@@ -608,7 +611,9 @@ class FeasibleStartIPM:
             - alpha: overall step size
             - converged: whether converged
         """
-        # Compute residuals
+        # ==========================================
+        # Step 2.1: Residual computation
+        # ==========================================
         r_D, r_P, r_C, mu_target = self.compute_residuals()
         
         # Debug: check if we're maintaining feasibility
@@ -616,14 +621,22 @@ class FeasibleStartIPM:
             print(f"    Residuals: ||r_P||={norm_inf(r_P):.6e}, ||r_D||={norm_inf(r_D):.6e}, ||r_C||={norm_inf(r_C):.6e}")
             print(f"    mu={self.mu:.6e}, mu_target={mu_target:.6e}")
         
-        # Build and factorize M
+        # ==========================================
+        # Step 2.2: System assembly
+        # ==========================================
+        # Build and factorize M = Z + XQ
         M_factor, M_reg = self.build_M_and_factorize()
         
-        # Solve Schur system (correct RHS sign and terms)
+        # Compute Schur system RHS: b = -E M^{-1} r_C (and r_P, r_D for robustness)
         b = self.schur_rhs(r_P, r_D, r_C)
+        
+        # ==========================================
+        # Step 2.3: Direction computation
+        # ==========================================
+        # Solve S Δy = b
         d_y = self.schur_solve(b)
         
-        # Back-substitute including -X r_D in the Δx RHS
+        # Back-substitute to get Δx and Δz
         d_x, d_z = self.back_substitute_dx_dz(r_C, d_y, r_D=r_D)
         
         # Debug: check Newton step
@@ -635,19 +648,27 @@ class FeasibleStartIPM:
             print(f"    min(z): {np.min(self.z):.6e}, min(d_z): {np.min(d_z):.6e}")
             print(f"    Components where d_z < 0: {np.sum(d_z < 0)}/{len(d_z)}")
         
-        # Fraction-to-boundary
+        # ==========================================
+        # Step 2.4: Step-size selection
+        # ==========================================
+        # Fraction-to-boundary rule
         alpha_pri, alpha_dual, alpha = fraction_to_boundary(
             self.x, d_x, self.z, d_z, gamma=self.cfg['gamma']
         )
         
-        # Update
+        # ==========================================
+        # Step 2.5: Update
+        # ==========================================
         self.update_and_mu(alpha, d_x, d_y, d_z)
         
+        # ==========================================
+        # Step 2.6: Stopping criterion
+        # ==========================================
         # Check convergence
         r_D_new, r_P_new, _, _ = self.compute_residuals()
 
         # KKT consistency checks (diagnostic at high verbosity)
-        if self.cfg.get('verbosity', 1) >= 3:
+        if self.cfg['verbosity'] >= 3:
             Ety_dy_chk = apply_E_transpose(d_y, self.blocks, self.n)
             eq1 = (self.Q @ d_x + Ety_dy_chk - d_z) + r_D  # ~0
             eq2 = apply_E(d_x, self.blocks) + r_P          # ~0

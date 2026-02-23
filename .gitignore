@@ -16,3 +16,6 @@ venv/
 # OS junk files
 .DS_Store
 Thumbs.db
+
+# tex files
+*.tex
