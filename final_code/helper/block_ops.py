@@ -1,5 +1,5 @@
 """
-Block operators: apply_E, apply_E^T, block utilities.
+Block operators: apply_E, apply_E^T, block utilities and example problem generator.
 Never form the full E matrix explicitly.
 """
 

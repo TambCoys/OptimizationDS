@@ -1,5 +1,5 @@
 """
-Numerics helpers: fraction-to-boundary, norms, tiny rcond check.
+Numerics helpers: fraction-to-boundary, norm infinity.
 """
 
 import numpy as np
@@ -57,50 +57,3 @@ def fraction_to_boundary(x, d_x, z, d_z, gamma=0.99):
 def norm_inf(a):
     """Compute infinity norm (max absolute value)."""
     return np.linalg.norm(a, ord=np.inf)
-
-
-def check_rcond(M, min_rcond=1e-12):
-    """
-    Check reciprocal condition number of M.
-    
-    Parameters:
-    -----------
-    M : array-like, 2D
-        Matrix to check.
-    min_rcond : float, default=1e-12
-        Minimum acceptable rcond.
-    
-    Returns:
-    --------
-    rcond : float
-        Reciprocal condition number.
-    needs_regularization : bool
-        True if regularization might be needed.
-    """
-    if M.shape[0] != M.shape[1]:
-        raise ValueError("M must be square")
-    
-    # For dense matrices, use numpy's cond estimate
-    if isinstance(M, np.ndarray) and M.ndim == 2:
-        try:
-            # Estimate condition number via SVD (cheaper than full eig)
-            s = np.linalg.svd(M, compute_uv=False)
-            if len(s) == 0 or s[0] == 0:
-                return 0.0, True
-            rcond = s[-1] / s[0]
-            return rcond, rcond < min_rcond
-        except:
-            # Fallback: try to compute norm
-            try:
-                norm_M = np.linalg.norm(M, ord=2)
-                if norm_M == 0:
-                    return 0.0, True
-                # Very rough estimate
-                return 1e-15, True
-            except:
-                return 0.0, True
-    
-    # For sparse matrices, use a different approach
-    # This is a placeholder - in practice, you'd use scipy.sparse.linalg
-    return 1e-10, False
-

@@ -29,7 +29,7 @@ Your code follows many "best practices" that make it robust, efficient, and main
 * **Hybrid Schur Solver (`schur_solve`):** This is another outstanding feature. You correctly identified that the bottleneck is solving the `|K| \times |K|` Schur system `S d_y = b`.
     * **Small `|K|`:** Assembling the dense `S` by probing (`S[:, j] = schur_operator(e_j)`) and using a direct `cho_factor` (Cholesky) is smart. It's fast and stable.
     * **Large `|K|`:** Switching to PCG (Conjugate Gradient) on the matrix-free `schur_operator` is the right move. This scales your algorithm to problems with many blocks.
-* **Robustness (Regularization):** Your `build_M_and_factorize` includes adaptive regularization (`tau_reg`) and checks the condition number (`check_rcond`). This prevents the solver from failing if the `M` matrix becomes ill-conditioned, which is a common issue in later IPM iterations.
+* **Robustness (Regularization):** Your `build_M_and_factorize` includes adaptive regularization (`tau_reg`) based on a fast infinity-norm heuristic. This prevents the solver from failing if the `M` matrix becomes ill-conditioned, which is a common issue in later IPM iterations.
 * **Baseline Comparison (`run_p34.py`):** You compare your solution against `cvxpy` and `scipy`. This is the single best thing you can do to gain confidence in a new solver. It proves your algorithm is converging to the *correct* optimal solution, not just a random point.
 * **Structure:** The project is perfectly organized. Each file has a clear responsibility (`solver`, `operators`, `utils`, `runner`), making it easy to read, debug, and extend.
 

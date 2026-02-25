@@ -137,17 +137,32 @@ class FeasibleStartIPM:
             delta_k = max(self.cfg['eps_delta'], self.cfg['tau_delta'] * w_range)
             delta_per_block[k] = delta_k
         
+        # old approach, single pass
+        # # Step 1.4: Dual start (y_k = -min(w_Ik) + δ_k, z = w + E^T y)
+        # y = np.zeros(self.n_blocks, dtype=float)
+        # z = np.zeros(self.n, dtype=float)
+        
+        # for k, block in enumerate(self.blocks):
+        #     w_block = w[block]
+        #     w_min = np.min(w_block)
+        #     delta_k = delta_per_block[k]
+        #     y[k] = -w_min + delta_k
+        #     z[block] = w[block] + y[k]
+        
         # Step 1.4: Dual start (y_k = -min(w_Ik) + δ_k, z = w + E^T y)
+        # Coherent implementation using helper
         y = np.zeros(self.n_blocks, dtype=float)
-        z = np.zeros(self.n, dtype=float)
         
         for k, block in enumerate(self.blocks):
             w_block = w[block]
             w_min = np.min(w_block)
             delta_k = delta_per_block[k]
             y[k] = -w_min + delta_k
-            z[block] = w[block] + y[k]
-        
+            
+        # Compute z = w + E^T y
+        Ety = apply_E_transpose(y, self.blocks, self.n)
+        z = w + Ety
+
         # Step 1.5: Compute initial gap
         mu = np.dot(x, z) / self.n
         
@@ -272,7 +287,7 @@ class FeasibleStartIPM:
                 
             tau = self.cfg['tau_reg']
             if tau is None:
-                M_norm_inf = np.linalg.norm(M, ord=np.inf)
+                M_norm_inf = norm_inf(M)
                 tau = max(0.0, min(1e-8, 1e-10 * M_norm_inf))
             
             if tau > 0.0:
@@ -290,52 +305,6 @@ class FeasibleStartIPM:
                 self.M_factor = lu_factor(M)
             
             return self.M_factor, self.M_reg 
-                
-        #     # Factorize (use sparse Cholesky if available, else LU)
-        #     try:
-        #         # Try Cholesky decomposition (sparse LU because cholesky doesnt work on non symmetric matrices)
-        #         M_factor = scipy.sparse.linalg.splu(M.tocsc())
-        #         self.M_factor = M_factor
-        #         return M_factor, self.M_reg
-        #     except:
-        #         # Fallback to LU
-        #         M_factor = scipy.sparse.linalg.splu(M.tocsc())
-        #         self.M_factor = M_factor
-        #         return M_factor, self.M_reg
-        # else:
-        #     # Dense case: M = diag(z) + diag(x) * Q (not guaranteed symmetric)
-        #     X = np.diag(self.x)
-        #     Z = np.diag(self.z)
-        #     M = Z + X @ self.Q
-            
-        #     # Check condition number
-        #     rcond, needs_reg = check_rcond(M, min_rcond=1e-12)
-            
-        #     tau = self.cfg['tau_reg']
-        #     if tau is None and needs_reg:
-        #         # Adaptive regularization
-        #         M_norm = np.linalg.norm(M, ord=2)
-        #         tau = max(1e-12, min(1e-8, 1e-10 * M_norm))
-            
-        #     # Regularize if needed
-        #     if tau is not None and tau > 0:
-        #         M = M + tau * np.eye(self.n)
-        #         self.M_reg = tau
-        #     else:
-        #         self.M_reg = None
-            
-        #     # Factorize with LU (valid for non-symmetric M)
-        #     try:
-        #         M_factor = lu_factor(M)
-        #         self.M_factor = M_factor
-        #         return M_factor, self.M_reg
-        #     except Exception:
-        #         # Slightly stronger regularization and retry
-        #         M = M + 1e-10 * np.eye(self.n)
-        #         self.M_reg = (self.M_reg or 0.0) + 1e-10
-        #         M_factor = lu_factor(M)
-        #         self.M_factor = M_factor
-        #         return M_factor, self.M_reg
     
     def solve_M_system(self, rhs):
         """

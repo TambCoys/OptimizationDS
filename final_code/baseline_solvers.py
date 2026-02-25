@@ -1,16 +1,17 @@
 """
-Baseline QP solver using CVXPY for comparison.
+Baseline QP solvers using CVXPY and SciPy for comparison.
 Solves the same problem: min (1/2) x^T Q x + q^T x  s.t.  Ex = 1, x >= 0
 """
 
 import numpy as np
 import scipy.sparse
+
 try:
     import cvxpy as cp
     CVXPY_AVAILABLE = True
 except ImportError:
     CVXPY_AVAILABLE = False
-    print("Warning: CVXPY not available. Install with: pip install cvxpy")
+    print("Warning: CVXPY not available")
 
 
 def solve_baseline_cvxpy(Q, q, blocks):
@@ -106,7 +107,7 @@ def solve_baseline_scipy(Q, q, blocks):
         - solve_time: solve time
     """
     from scipy.optimize import minimize
-    
+
     Q = np.asarray(Q, dtype=float)
     if scipy.sparse.issparse(Q):
         Q = Q.toarray() # type: ignore
@@ -126,15 +127,23 @@ def solve_baseline_scipy(Q, q, blocks):
     def gradient(x):
         return Q @ x + q
     
+    
+    # OLD APPROACH (Nested closures - commented out for clarity)
+    # constraints = []
+    # for k, block in enumerate(blocks):
+    #     # Create constraint: sum(x[block]) == 1
+    #     def make_constraint(block_indices):
+    #         def constraint_eq(x):
+    #             return np.sum(x[block_indices]) - 1.0
+    #         return {'type': 'eq', 'fun': constraint_eq}
+    #     constraints.append(make_constraint(block))
+
+
     # Constraints: Ex = 1 (equality constraints)
-    constraints = []
-    for k, block in enumerate(blocks):
-        # Create constraint: sum(x[block]) == 1
-        def make_constraint(block_indices):
-            def constraint_eq(x):
-                return np.sum(x[block_indices]) - 1.0
-            return {'type': 'eq', 'fun': constraint_eq}
-        constraints.append(make_constraint(block))
+    def eq_constraints(x):
+        return np.array([np.sum(x[block]) - 1.0 for block in blocks])
+    
+    constraints = [{'type': 'eq', 'fun': eq_constraints}]
     
     # Bounds: x >= 0
     bounds = [(0, None) for _ in range(n)]
