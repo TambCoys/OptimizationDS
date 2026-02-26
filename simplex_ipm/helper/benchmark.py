@@ -15,11 +15,11 @@ import numpy as np
 import time
 import traceback
 
-from main.algo1_baseline_solver import BaselineIPM
-from main.algo1_final_solver import FeasibleStartIPM
-from main.baseline_solvers import solve_baseline_cvxpy, solve_baseline_scipy
-from main.helper.utils import norm_inf
-from main.helper.block_ops import create_example_problem, apply_E
+from simplex_ipm.algo1_baseline_solver import BaselineIPM
+from simplex_ipm.algo1_final_solver import FeasibleStartIPM
+from simplex_ipm.baseline_solvers import solve_baseline_cvxpy, solve_baseline_scipy
+from simplex_ipm.helper.utils import norm_inf
+from simplex_ipm.helper.block_ops import create_example_problem, apply_E
 
 
 # ---------------------------------------------------------------------------

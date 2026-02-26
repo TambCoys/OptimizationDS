@@ -1,5 +1,5 @@
 import numpy as np
-from main.helper.utils import norm_inf
+from simplex_ipm.helper.utils import norm_inf
 
 
 class BaselineIPM:

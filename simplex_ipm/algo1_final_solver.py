@@ -8,8 +8,8 @@ import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
 from scipy.linalg import cho_factor, cho_solve
-from main.helper.block_ops import apply_E, apply_E_transpose, validate_blocks
-from main.helper.utils import fraction_to_boundary, norm_inf
+from simplex_ipm.helper.block_ops import apply_E, apply_E_transpose, validate_blocks
+from simplex_ipm.helper.utils import fraction_to_boundary, norm_inf
 
 
 class FeasibleStartIPM:
@@ -591,7 +591,7 @@ class FeasibleStartIPM:
         
         # Debug: check Newton step
         if self.cfg['verbosity'] >= 3:
-            from main.helper.block_ops import apply_E
+            from simplex_ipm.helper.block_ops import apply_E
             Edx = apply_E(d_x, self.blocks)
             print(f"    Newton step: ||d_x||={norm_inf(d_x):.6e}, ||d_y||={norm_inf(d_y):.6e}, ||d_z||={norm_inf(d_z):.6e}")
             print(f"    E*d_x (should be -r_P): {Edx}, -r_P: {-r_P}")

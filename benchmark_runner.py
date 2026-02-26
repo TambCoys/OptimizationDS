@@ -1,8 +1,8 @@
 """Thin CLI entrypoint — all logic lives in main.helper.benchmark."""
 
 import argparse
-from main.helper.block_ops import create_example_problem
-from main.helper.benchmark import (
+from simplex_ipm.helper.block_ops import create_example_problem
+from simplex_ipm.helper.benchmark import (
     run_single_benchmark,
     run_suite,
     print_comparison_table,
