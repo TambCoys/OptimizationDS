@@ -7,7 +7,7 @@ Core implementation following the LaTeX specification.
 import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
-from scipy.linalg import cho_factor, cho_solve, lu_factor, lu_solve
+from scipy.linalg import cho_factor, cho_solve
 from main.helper.block_ops import apply_E, apply_E_transpose, validate_blocks
 from main.helper.utils import fraction_to_boundary, norm_inf
 
@@ -137,20 +137,7 @@ class FeasibleStartIPM:
             delta_k = max(self.cfg['eps_delta'], self.cfg['tau_delta'] * w_range)
             delta_per_block[k] = delta_k
         
-        # old approach, single pass
-        # # Step 1.4: Dual start (y_k = -min(w_Ik) + δ_k, z = w + E^T y)
-        # y = np.zeros(self.n_blocks, dtype=float)
-        # z = np.zeros(self.n, dtype=float)
-        
-        # for k, block in enumerate(self.blocks):
-        #     w_block = w[block]
-        #     w_min = np.min(w_block)
-        #     delta_k = delta_per_block[k]
-        #     y[k] = -w_min + delta_k
-        #     z[block] = w[block] + y[k]
-        
         # Step 1.4: Dual start (y_k = -min(w_Ik) + δ_k, z = w + E^T y)
-        # Coherent implementation using helper
         y = np.zeros(self.n_blocks, dtype=float)
         
         for k, block in enumerate(self.blocks):
@@ -226,89 +213,83 @@ class FeasibleStartIPM:
         
         return r_D, r_P, r_C, mu_target
     
-    def build_M_and_factorize(self):
+    def build_H_and_factorize(self):
         """
-        Build M = Z + XQ and factorize. [using LU (M is generally nonsymmetric)]
+        Build H = Q + X^{-1}Z and factorize using Cholesky.
         
         Returns:
         --------
-        M_factor : object
-            Factorization object (LU factor or sparse solver).
-        M_reg : float or None
+        H_factor : object
+            Factorization object (Cholesky factor or sparse solver).
+        H_reg : float or None
             Regularization parameter used (if any).
         """
-        # Build M = Z + XQ
-        # Z = diag(z), X = diag(x)
-        # M = Z + XQ = diag(z) + diag(x) * Q
+        # Safe division to avoid ZeroDivisionError
+        x_safe = np.maximum(self.x, 1e-14)
+        x_inv_z = self.z / x_safe
         
         if self.is_sparse:
-            # Sparse case: M = diag(z) + diag(x) * Q
-            X = scipy.sparse.diags(self.x, format='csc')
-            Z = scipy.sparse.diags(self.z, format='csc')
-            M = Z + X @ self.Q
+            # Sparse case: H = Q + diag(z/x)
+            X_inv_Z = scipy.sparse.diags(x_inv_z, format='csc')
+            H = self.Q + X_inv_Z
             
-            # Check condition number (rough estimate)
-            # For sparse, we'll use regularization if needed
             tau = self.cfg['tau_reg']
             if tau is None:
                 # Adaptive regularization
-                # Estimate ||M||_2 (rough: use max row sum)
-                M_norm_inf = np.max(np.abs(M).sum(axis=1).A1)
-                tau = max(0.0, min(1e-8, 1e-10 * M_norm_inf))
+                H_norm_inf = np.max(np.abs(H).sum(axis=1).A1)
+                tau = max(0.0, min(1e-8, 1e-10 * H_norm_inf))
             
-            # Regularize if needed
             if tau > 0.0:
-                n = M.shape[0]
-                M = M + tau * scipy.sparse.eye(n, format='csc')
-                self.M_reg = tau
+                n = H.shape[0]
+                H = H + tau * scipy.sparse.eye(n, format='csc')
+                self.H_reg = tau
             else:
-                self.M_reg = None
+                self.H_reg = None
             
-            M_csc = M if scipy.sparse.isspmatrix_csc(M) else M.tocsc()
+            H_csc = H if scipy.sparse.isspmatrix_csc(H) else H.tocsc()
             try:
-                self.M_factor = scipy.sparse.linalg.splu(
-                    M_csc,
-                    permc_spec=self.cfg.get('permc_spec', 'COLAMD'),
+                # For sparse symmetric, we can use splu or a sparse Cholesky if available.
+                # SciPy doesn't have a built-in sparse Cholesky, so we use splu.
+                self.H_factor = scipy.sparse.linalg.splu(
+                    H_csc,
+                    permc_spec=self.cfg.get('permc_spec', 'MMD_AT_PLUS_A'),
                 )
             except Exception:
-                # bump tau and retry once
-                bump = max(1e-12, (self.M_reg or 0.0) * 10 or 1e-12)
-                M_csc = M_csc + bump * scipy.sparse.eye(M.shape[0], format="csc")
-                self.M_reg = (self.M_reg or 0.0) + bump
-                self.M_factor = scipy.sparse.linalg.splu(M_csc, permc_spec="COLAMD")
+                bump = max(1e-12, (self.H_reg or 0.0) * 10 or 1e-12)
+                H_csc = H_csc + bump * scipy.sparse.eye(H.shape[0], format="csc")
+                self.H_reg = (self.H_reg or 0.0) + bump
+                self.H_factor = scipy.sparse.linalg.splu(H_csc, permc_spec="MMD_AT_PLUS_A")
             
-            return self.M_factor, self.M_reg
+            return self.H_factor, self.H_reg
         
         else:
-            # --- Dense path (LU only) ---
-            X = np.diag(self.x)
-            Z = np.diag(self.z)
-            M = Z + X @ self.Q  # not symmetric in general
+            # --- Dense path (Cholesky) ---
+            H = self.Q + np.diag(x_inv_z)
                 
             tau = self.cfg['tau_reg']
             if tau is None:
-                M_norm_inf = norm_inf(M)
-                tau = max(0.0, min(1e-8, 1e-10 * M_norm_inf))
+                H_norm_inf = norm_inf(H)
+                tau = max(0.0, min(1e-8, 1e-10 * H_norm_inf))
             
             if tau > 0.0:
-                M = M + tau * np.eye(self.n)
-                self.M_reg = tau
+                H = H + tau * np.eye(self.n)
+                self.H_reg = tau
             else:
-                self.M_reg = None
+                self.H_reg = None
             
             try:
-                self.M_factor = lu_factor(M)
-            except Exception:
-                bump = max(1e-12, (self.M_reg or 0.0) * 10 or 1e-12)
-                M = M + bump * np.eye(self.n)
-                self.M_reg = (self.M_reg or 0.0) + bump
-                self.M_factor = lu_factor(M)
+                self.H_factor = cho_factor(H, lower=False)
+            except np.linalg.LinAlgError:
+                bump = max(1e-12, (self.H_reg or 0.0) * 10 or 1e-12)
+                H = H + bump * np.eye(self.n)
+                self.H_reg = (self.H_reg or 0.0) + bump
+                self.H_factor = cho_factor(H, lower=False)
             
-            return self.M_factor, self.M_reg 
+            return self.H_factor, self.H_reg 
     
-    def solve_M_system(self, rhs):
+    def solve_H_system(self, rhs):
         """
-        Solve M * sol = rhs using cached factorization.
+        Solve H * sol = rhs using cached factorization.
         
         Parameters:
         -----------
@@ -318,21 +299,21 @@ class FeasibleStartIPM:
         Returns:
         --------
         sol : ndarray, shape (n,)
-            Solution to M * sol = rhs.
+            Solution to H * sol = rhs.
         """
         rhs = np.asarray(rhs, dtype=float)
         
         if self.is_sparse:
             # Sparse solve
-            return self.M_factor.solve(rhs)
+            return self.H_factor.solve(rhs)
         else:
-            # Dense solve via LU
-            return lu_solve(self.M_factor, rhs)
+            # Dense solve via Cholesky
+            return cho_solve(self.H_factor, rhs)
     
     def schur_rhs(self, r_P, r_D, r_C):
         """
-        Compute Schur system RHS for S Δy = b with S = E M^{-1} X E^T:
-            b = r_P + E M^{-1} (r_C + X r_D)
+        Compute Schur system RHS for S Δy = b with S = E H^{-1} E^T:
+            b = r_P - E H^{-1} (r_D + X^{-1} r_C)
 
         Parameters:
         -----------
@@ -348,21 +329,23 @@ class FeasibleStartIPM:
         b : ndarray, shape (|K|,)
             Schur system RHS.
         """
-        # Core RHS for the M^{-1} application: r_C + X r_D
+        x_safe = np.maximum(self.x, 1e-14)
+        x_inv_r_C = r_C / x_safe
+        
         if r_D is None:
-            rhs_core = r_C
+            rhs_core = x_inv_r_C
         else:
-            rhs_core = r_C + self.x * r_D
+            rhs_core = r_D + x_inv_r_C
         
-        M_inv_rhs = self.solve_M_system(rhs_core)
+        H_inv_rhs = self.solve_H_system(rhs_core)
         
-        # b = r_P - E M^{-1} rhs_core  (ensures E Δx = -r_P)
-        b = r_P - apply_E(M_inv_rhs, self.blocks)
+        # b = r_P - E H^{-1} (r_D + X^{-1} r_C)
+        b = r_P - apply_E(H_inv_rhs, self.blocks)
         return b
     
     def schur_operator(self, v):
         """
-        Apply Schur operator: S v = E * M^{-1} * (X * (E^T v)).
+        Apply Schur operator: S v = E * H^{-1} * (E^T v).
         
         Parameters:
         -----------
@@ -379,14 +362,11 @@ class FeasibleStartIPM:
         # Step 1: E^T v
         Ety = apply_E_transpose(v, self.blocks, self.n)
         
-        # Step 2: X * (E^T v)
-        X_Ety = self.x * Ety
+        # Step 2: H^{-1} * (E^T v)
+        H_inv_Ety = self.solve_H_system(Ety)
         
-        # Step 3: M^{-1} * (X * (E^T v))
-        M_inv_X_Ety = self.solve_M_system(X_Ety)
-        
-        # Step 4: E * M^{-1} * (X * (E^T v))
-        Sv = apply_E(M_inv_X_Ety, self.blocks)
+        # Step 3: E * H^{-1} * (E^T v)
+        Sv = apply_E(H_inv_Ety, self.blocks)
         
         return Sv
     
@@ -462,7 +442,7 @@ class FeasibleStartIPM:
         """
         Back-substitute to get Δx and Δz.
         
-        Δx = M^{-1} * (-r_C - X * E^T * Δy)
+        Δx = H^{-1} * (-X^{-1} r_C - r_D - E^T * Δy)
         Δz = Q * Δx + E^T * Δy + r_D
         
         In feasible-start, r_D should be zero, but we include it for robustness.
@@ -486,19 +466,20 @@ class FeasibleStartIPM:
         r_C = np.asarray(r_C, dtype=float)
         d_y = np.asarray(d_y, dtype=float)
         
+        # Safe division
+        x_safe = np.maximum(self.x, 1e-14)
+        x_inv_r_C = r_C / x_safe
+        
         # Step 1: E^T * Δy
         Ety_dy = apply_E_transpose(d_y, self.blocks, self.n)
         
-        # Step 2: X * E^T * Δy
-        X_Ety_dy = self.x * Ety_dy
-        
-        # Step 3: Δx = M^{-1} * (-r_C - X r_D - X * E^T * Δy)
-        rhs_dx = -r_C - X_Ety_dy
+        # Step 2: Δx = H^{-1} * (-X^{-1} r_C - r_D - E^T * Δy)
+        rhs_dx = -x_inv_r_C - Ety_dy
         if r_D is not None:
-            rhs_dx = rhs_dx - self.x * r_D
-        d_x = self.solve_M_system(rhs_dx)
+            rhs_dx = rhs_dx - r_D
+        d_x = self.solve_H_system(rhs_dx)
         
-        # Step 4: Δz = Q * Δx + E^T * Δy + r_D
+        # Step 3: Δz = Q * Δx + E^T * Δy + r_D
         if self.is_sparse:
             Q_dx = self.Q.dot(d_x)
         else:
@@ -593,10 +574,10 @@ class FeasibleStartIPM:
         # ==========================================
         # Step 2.2: System assembly
         # ==========================================
-        # Build and factorize M = Z + XQ
-        M_factor, M_reg = self.build_M_and_factorize()
+        # Build and factorize H = Q + X^{-1}Z
+        H_factor, H_reg = self.build_H_and_factorize()
         
-        # Compute Schur system RHS: b = -E M^{-1} r_C (and r_P, r_D for robustness)
+        # Compute Schur system RHS: b = -E H^{-1} (r_D + X^{-1} r_C) (and r_P for robustness)
         b = self.schur_rhs(r_P, r_D, r_C)
         
         # ==========================================
@@ -610,7 +591,7 @@ class FeasibleStartIPM:
         
         # Debug: check Newton step
         if self.cfg['verbosity'] >= 3:
-            from helper.block_ops import apply_E
+            from main.helper.block_ops import apply_E
             Edx = apply_E(d_x, self.blocks)
             print(f"    Newton step: ||d_x||={norm_inf(d_x):.6e}, ||d_y||={norm_inf(d_y):.6e}, ||d_z||={norm_inf(d_z):.6e}")
             print(f"    E*d_x (should be -r_P): {Edx}, -r_P: {-r_P}")
@@ -643,10 +624,10 @@ class FeasibleStartIPM:
             eq1 = (self.Q @ d_x + Ety_dy_chk - d_z) + r_D  # ~0
             eq2 = apply_E(d_x, self.blocks) + r_P          # ~0
             eq3 = self.z * d_x + self.x * d_z + r_C        # ~0
-            print(f"    Check eq1 (dual lin): {np.linalg.norm(eq1, np.inf):.3e}")
-            print(f"    Check eq2 (primal  ): {np.linalg.norm(eq2, np.inf):.3e}")
-            print(f"    Check eq3 (compl. ): {np.linalg.norm(eq3, np.inf):.3e}")
-            assert np.linalg.norm(eq2, np.inf) <= 1e-8, "E dx != -r_P (check Schur RHS sign)"
+            print(f"    Check eq1 (dual lin): {norm_inf(eq1):.3e}")
+            print(f"    Check eq2 (primal  ): {norm_inf(eq2):.3e}")
+            print(f"    Check eq3 (compl. ): {norm_inf(eq3):.3e}")
+            assert norm_inf(eq2) <= 1e-8, "E dx != -r_P (check Schur RHS sign)"
 
         is_converged = self.converged(r_D_new, r_P_new)
         
@@ -658,7 +639,7 @@ class FeasibleStartIPM:
             'alpha_dual': alpha_dual,
             'alpha': alpha,
             'converged': is_converged,
-            'M_reg': M_reg,
+            'H_reg': H_reg,
         }
         
         return info

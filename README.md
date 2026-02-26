@@ -6,7 +6,7 @@ Implementation of Algorithm 1: Feasible-Start, Fixed σ Interior Point Method fo
 
 Solve:
 
-```bash
+```
 min  (1/2) x^T Q x + q^T x
 s.t. Ex = 1,  x >= 0
 ```
@@ -17,108 +17,155 @@ where:
 - Blocks {I_k} partition indices (simplex constraint per block)
 - E is the block-sum operator (never formed explicitly)
 
-## Implementation
+## Project Structure
 
-### Files
+```
+main/
+  algo1_final_solver.py    # Final solver (FeasibleStartIPM) — H formulation, Cholesky
+  algo1_baseline_solver.py # Baseline solver (BaselineIPM) — H formulation, np.linalg.solve
+  baseline_solvers.py      # CVXPY and SciPy reference solvers
+  helper/
+    block_ops.py           # Block operators (apply_E, apply_E^T), example problem generator
+    benchmark.py           # Benchmark helpers (timing, feasibility, suite generator)
+    utils.py               # Numerics helpers (fraction-to-boundary, norms)
+benchmark_runner.py        # CLI benchmark script (single problem or full suite)
+feedback2.tex              # Paper / theoretical specification
+explanation/               # Detailed markdown explanations of each module
+changes/                   # Changelog for major refactors
+```
 
-- `run_p34.py`: Main entry point - loads problem data and calls solver
-- `solver_algo1.py`: Core Algorithm 1 implementation (FeasibleStartIPM class)
-- `block_ops.py`: Block operators (apply_E, apply_E^T) - never forms full E matrix
-- `utils.py`: Numerics helpers (fraction-to-boundary, norms, rcond check)
+## Solvers
 
-### Algorithm Features
+### Final Solver (`algo1_final_solver.py` — `FeasibleStartIPM`)
 
-- **Feasible-start initialization**: δ-rule for strictly interior starting point
-- **Fixed centering parameter**: σ ∈ (0, 0.5)
-- **Newton backend**: Uses M = Z + XQ (SPD) with optional regularization
-- **Schur system**: Operator form S v = E(M^{-1}(X(E^T v)))
-  - Assembles full matrix if |K| ≤ K_th (default 200)
-  - Uses PCG on operator if |K| > K_th
-- **Dense/sparse support**: Automatically handles both dense and sparse Q matrices
+The production solver. Uses the symmetric **H formulation** (H = Q + X⁻¹Z) with Cholesky factorization, operator-form Schur complement, and automatic dense/sparse dispatch.
+
+**Configuration parameters:**
+
+| Parameter | Default | Description |
+|---|---|---|
+| `sigma` | 0.1 | Centering parameter σ ∈ (0, 0.5). Lower = more aggressive |
+| `max_iter` | 100 | Maximum IPM iterations |
+| `eps_feas` | 1e-8 | Feasibility tolerance (‖r_P‖∞, ‖r_D‖∞) |
+| `eps_comp` | 1e-8 | Complementarity tolerance (μ) |
+| `eps_delta` | 1e-8 | Minimum δ for initialization |
+| `tau_delta` | 1e-2 | δ scaling factor for range-based rule |
+| `tau_reg` | None | Regularization: None = adaptive, or fixed float |
+| `K_th` | 200 | Block count threshold: ≤K_th assembles Schur, >K_th uses PCG |
+| `pcg_tol` | 1e-10 | PCG solver tolerance (when |K| > K_th) |
+| `pcg_maxit` | 1000 | PCG max iterations |
+| `verbosity` | 1 | 0=silent, 1=summary, 2=per-iter, 3=debug |
+| `gamma` | 0.99 | Fraction-to-boundary safety factor |
+
+### Baseline Solver (`algo1_baseline_solver.py` — `BaselineIPM`)
+
+A simpler reference implementation of the same algorithm. Uses the H formulation with `np.linalg.solve` (no Cholesky), explicitly forms the full E matrix, and assembles the Schur complement directly. Meant for validation, not performance.
+
+**Configuration parameters:**
+
+| Parameter | Default | Description |
+|---|---|---|
+| `sigma` | 0.01 | Centering parameter (more conservative default than final) |
+| `max_iter` | 100000 | Maximum iterations (very high to ensure convergence) |
+| `eps_feas` | 1e-8 | Feasibility tolerance |
+| `eps_comp` | 1e-8 | Complementarity tolerance |
+| `eps` | 1e-10 | Minimum ε for δ-rule |
+| `tau` | 1e-3 | δ scaling factor |
+
+### Reference Solvers (`baseline_solvers.py`)
+
+- **CVXPY** — Calls OSQP (compiled C solver) via CVXPY. Used as the performance baseline.
+- **SciPy** — Uses `scipy.optimize.minimize` with SLSQP. Very slow for QPs; included for completeness.
 
 ## Usage
 
 ### Basic Usage
 
 ```python
-from solver_algo1 import FeasibleStartIPM
-import numpy as np
+from main.algo1_final_solver import FeasibleStartIPM
 
-# Problem data
-Q = np.array([[2, 1], [1, 2]])  # PSD matrix
-q = np.array([-1, -1])
-blocks = [[0], [1]]  # Two blocks, one index each
-
-# Configuration
-cfg = {
-    'sigma': 0.1,
-    'max_iter': 100,
-    'eps_feas': 1e-8,
-    'eps_comp': 1e-8,
-    'verbosity': 2,
-}
-
-# Solve
-solver = FeasibleStartIPM(Q, q, blocks, cfg=cfg)
+solver = FeasibleStartIPM(Q, q, blocks, cfg={'sigma': 0.1, 'verbosity': 2})
 result = solver.solve()
 
-# Access solution
-x = result['x']
-y = result['y']
-z = result['z']
+x = result['x']   # primal solution
+y = result['y']   # dual variables (per-block)
+z = result['z']   # dual slack
 ```
 
-### Run Example
+### Example Problem Generation
+
+```python
+from main.helper.block_ops import create_example_problem
+
+# Dense, n=500, 50 blocks
+Q, q, blocks = create_example_problem(n=500, n_blocks=50, seed=42, density=1.0)
+
+# Sparse, n=1000, 5% density
+Q, q, blocks = create_example_problem(n=1000, n_blocks=50, seed=42, density=0.05)
+```
+
+## Benchmarking
+
+### Single Problem
 
 ```bash
-python run_p34.py
+uv run benchmark_runner.py --n 500 --n-blocks 50
+uv run benchmark_runner.py --n 1000 --n-blocks 100 --density 0.1
+uv run benchmark_runner.py --n 100 --n-blocks 10 --debug
 ```
 
-## Configuration Parameters
+**CLI flags:**
 
-- `sigma`: Centering parameter in (0, 0.5), default 0.1
-- `max_iter`: Maximum iterations, default 100
-- `eps_feas`: Feasibility tolerance, default 1e-8
-- `eps_comp`: Complementarity tolerance, default 1e-8
-- `eps_delta`: Minimum δ for initialization, default 1e-8
-- `tau_delta`: δ scaling factor, default 1e-2
-- `tau_reg`: Regularization parameter (None for adaptive), default None
-- `K_th`: Threshold for assembling Schur matrix, default 200
-- `pcg_tol`: PCG tolerance, default 1e-10
-- `pcg_maxit`: PCG max iterations, default 1000
-- `verbosity`: 0=silent, 1=summary, 2=verbose, default 1
-- `gamma`: Fraction-to-boundary safety factor, default 0.99
+| Flag | Default | Description |
+|---|---|---|
+| `--n` | 20 | Problem size |
+| `--n-blocks` | 3 | Number of simplex blocks |
+| `--density` | 1.0 | Q matrix density (1.0=dense, <1.0=sparse) |
+| `--n-runs` | 1 | Number of timing runs (for averaging) |
+| `--seed` | 42 | Random seed |
+| `--sigma` | 0.1 | Centering parameter for Algorithm 1 |
+| `--max-iter` | 200 | Max iterations for Algorithm 1 |
+| `--verbosity` | 0 | Verbosity level |
+| `--debug` | off | Print detailed solution statistics |
+| `--suite` | off | Run the full benchmark suite (see below) |
+
+### Benchmark Suite
+
+Runs a systematic grid of problems covering three axes:
+
+```bash
+uv run benchmark_runner.py --suite
+```
+
+The suite includes:
+- **Scaling tests** (n = 50, 100, 500, 1000, 2000) — how the solver scales with problem size
+- **Sparsity tests** (density = 1.0, 0.5, 0.1, 0.01 at n=1000) — dense vs sparse performance
+- **Block structure tests** (|K| = 2, 10, 50, 100, 250 at n=500) — effect of block count
+
+At the end, prints a compact summary table comparing CVXPY vs Final Solver across all configurations.
+
+## Mathematical Details
+
+See `feedback2.tex` for the full theoretical specification. Key points:
+
+1. **Initialization (δ-rule)**: Uniform primal x⁰_i = 1/|I_k|, adaptive δ per block ensuring z⁰ > 0.
+
+2. **Newton system**: Eliminates Δz from the KKT system to get (Q + X⁻¹Z)Δx + E^T Δy = rhs, then uses the Schur complement S = E H⁻¹ E^T to solve for Δy first.
+
+3. **H formulation**: H = Q + X⁻¹Z is symmetric positive-definite → Cholesky factorization. The alternative M = Z + XQ is used only for the invertibility proof (M is not symmetric).
+
+4. **Step size**: Fraction-to-boundary rule with safety factor γ = 0.99.
+
+5. **Convergence**: ‖r_P‖∞ ≤ ε_feas, ‖r_D‖∞ ≤ ε_feas, μ ≤ ε_comp.
 
 ## Dependencies
 
 - numpy >= 1.20.0
 - scipy >= 1.7.0
+- cvxpy (for baseline comparison)
 
 Install with:
 
 ```bash
 pip install -r requirements.txt
 ```
-
-## Mathematical Details
-
-See the LaTeX specification document for full mathematical details. Key points:
-
-1. **Initialization (δ-rule)**:
-   - Uniform primal: x^0_i = 1/|I_k| for i in I_k
-   - Compute w = Qx^0 + q
-   - Per-block δ_k = max(ε, τ · (max w_i - min w_i))
-   - Dual: y^0_k = -min w_i + δ_k, z^0_i = w_i + y^0_k
-
-2. **Newton Step**:
-   - M = Z + XQ (SPD)
-   - Schur system: S Δy = b where S = E M^{-1} X E^T
-   - Back-substitute: Δx = M^{-1}(-r_C - X E^T Δy), Δz = Q Δx + E^T Δy
-
-3. **Step Size**:
-   - Fraction-to-boundary: α = min(α_pri, α_dual) with safety factor γ
-
-4. **Convergence**:
-   - ||r_P||∞ ≤ ε_feas
-   - ||r_D||∞ ≤ ε_feas
-   - μ ≤ ε_comp

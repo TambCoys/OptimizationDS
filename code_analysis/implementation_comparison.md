@@ -14,7 +14,7 @@ Both implementations target the same algorithm from the LaTeX document, but with
 |--------|---------------------|------------------|---------|
 | **Complexity** | Simple, direct | Full-featured, modular | Both valid |
 | **E matrix** | Explicitly formed | Operator form (never formed) | Different approaches |
-| **System formulation** | H = Q + diag(z/x) + δI | M = Z + XQ | Mathematically equivalent |
+| **System formulation** | H = Q + diag(z/x) + δI | H = Q + diag(z/x) | Mathematically equivalent |
 | **Schur complement** | Explicit S = E H^{-1} E^T | Operator form S v = E(M^{-1}(X(E^T v))) | Different approaches |
 | **Sparse support** | ❌ Dense only | ✅ Dense + sparse | solver_algo1.py more general |
 | **Large-scale** | ❌ Limited (forms full matrices) | ✅ PCG for large |K| | solver_algo1.py scales better |
@@ -143,21 +143,20 @@ rhs = -rD - (rC / x)  # rhs = -rD - X^{-1} rC
 
 ### solver_algo1.py (Lines 222-289)
 ```python
-# Uses M formulation (alternative from document)
-M = Z + X @ Q  # M = Z + XQ (not H!)
+# Uses H formulation
+H = Q + np.diag(z / np.maximum(x, 1e-14))
 # Then uses M^{-1} in operator form
 ```
 
 ### Comparison
 - ⚠️ **Different formulations**: 
   - `FeasibleStandard.py`: Uses **H = Q + diag(z/x) + δI** (exactly as Algorithm 1)
-  - `solver_algo1.py`: Uses **M = Z + XQ** (alternative formulation from document)
-- ✅ **Mathematically equivalent**: The document states both are equivalent (H = X^{-1}M + δI)
+  - `solver_algo1.py`: Uses **H = Q + diag(z/x)** (symmetric formulation)
+- ✅ **Mathematically equivalent**: Both use the symmetric H formulation.
 - ⚠️ **Numerical stability**: 
-  - H formulation: Requires computing `z/x` (division by x, can be unstable if x is small)
-  - M formulation: Avoids explicit division, more stable
+  - H formulation: Requires computing `z/x` (division by x, can be unstable if x is small, but mitigated by `np.maximum(x, 1e-14)`)
 
-**Verdict**: ✅ Both correct. `FeasibleStandard.py` matches Algorithm 1 exactly. `solver_algo1.py` uses a more numerically stable alternative.
+**Verdict**: ✅ Both correct. `FeasibleStandard.py` matches Algorithm 1 exactly. `solver_algo1.py` uses the same formulation with safe division.
 
 ---
 

@@ -14,7 +14,7 @@ The core logic in `solver_algo1.py` correctly implements a feasible-start, predi
 
 * **Feasible Start (Initialization):** The `initialize_delta_rule` is excellent. It correctly constructs a starting point `(x, y, z)` that is strictly positive (`x > 0, z > 0`) and *perfectly* satisfies both primal (`Ex = 1`) and dual (`Qx + q + E^T y - z = 0`) feasibility. This is a huge advantage, as the algorithm only needs to focus on achieving complementarity (`x_i z_i = 0`).
 * **Newton System:** Your derivation of the Newton step is **mathematically sound**. You are solving the standard KKT system, but you've used a (common) non-symmetric formulation.
-    * The system is based on `M = Z + XQ`.
+    * The system is based on `H = Q + X^{-1}Z`.
     * Your back-substitution steps (`back_substitute_dx_dz`) and the Schur complement RHS (`schur_rhs`) correctly correspond to this definition of `M`.
     * I verified that your steps `(d_x, d_y, d_z)` correctly solve the linearized KKT system `E(d_x) = -r_P`, `Q(d_x) + E^T(d_y) - d_z = -r_D`, and `Z(d_x) + X(d_z) = -r_C`. The logic is solid.
 * **Step Size:** The `fraction_to_boundary` function is the standard, correct way to maintain strict positivity for `x` and `z`.
@@ -41,7 +41,7 @@ Your code is already excellent, so these are more "next-step" ideas or theoretic
 
 ### 1. The `M` Matrix Formulation (Symmetry)
 
-* **Your approach:** You use `M = Z + XQ`. As noted in the `README`, this matrix is not generally symmetric (even if `Q` is). Your code correctly handles this by using general-purpose `lu_factor` (dense) or `splu` (sparse), which are robust.
+* **Your approach:** You use `H = Q + X^{-1}Z`. This matrix is symmetric positive definite, allowing the use of fast Cholesky factorization (`cho_factor`) for dense matrices and `splu` with symmetric permutation for sparse matrices.
 * **Alternative:** Many IPMs use a formulation that *guarantees* a symmetric, positive-definite (SPD) matrix, which allows using Cholesky factorization (which is roughly 2x faster than LU). This is achieved by:
     1.  Defining a scaling `D = (Z/X)^{1/2}`.
     2.  The key matrix becomes `M_sym = Q + X^{-1}Z` (or `Q + D^2`).

@@ -59,7 +59,8 @@ def solve_baseline_cvxpy(Q, q, blocks):
         constraints.append(cp.sum(x[block]) == 1.0)
     
     # Objective: (1/2) x^T Q x + q^T x
-    objective = cp.Minimize(0.5 * cp.quad_form(x, Q) + q @ x)
+    # Use cp.psd_wrap to bypass strict eigenvalue checks for numerical noise
+    objective = cp.Minimize(0.5 * cp.quad_form(x, cp.psd_wrap(Q)) + q @ x)
     
     # Solve
     problem = cp.Problem(objective, constraints)

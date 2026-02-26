@@ -4,6 +4,7 @@ Never form the full E matrix explicitly.
 """
 
 import numpy as np
+import scipy.sparse as sp
 
 
 def apply_E(x, blocks):
@@ -102,9 +103,8 @@ def validate_blocks(blocks, n):
     return True, None
 
 
-import numpy as np
 
-def create_example_problem(n=10, n_blocks=3, seed=42):
+def create_example_problem(n=10, n_blocks=3, seed=42, density=1.0):
     """
     Create a randomly generated example problem with a block partition.
     
@@ -116,10 +116,12 @@ def create_example_problem(n=10, n_blocks=3, seed=42):
         Number of blocks to partition the indices into (default is 3).
     seed : int, optional
         Random seed for reproducibility (default is 42).
+    density : float, optional
+        Density of the Q matrix (1.0 = dense, < 1.0 = sparse).
     
     Returns:
     --------
-    Q : numpy.ndarray
+    Q : numpy.ndarray or scipy.sparse.csc_matrix
         A strictly positive definite symmetric matrix of shape (n, n).
     q : numpy.ndarray
         A random 1D array (vector) of length n.
@@ -147,9 +149,18 @@ def create_example_problem(n=10, n_blocks=3, seed=42):
         blocks.append(list(range(start_idx, end_idx)))
     
     # Create positive semidefinite Q
-    Q = np.random.randn(n, n)
-    Q = Q.T @ Q  # Make it PSD
-    Q = Q + 0.1 * np.eye(n)  # Make it strictly positive definite
+    if density >= 1.0:
+        # Dense Q
+        Q = np.random.randn(n, n)
+        Q = Q.T @ Q  # Make it PSD
+        Q = Q + 0.1 * np.eye(n)  # Make it strictly positive definite
+    else:
+        # Sparse Q
+        # Generate a random sparse matrix
+        A = sp.random(n, n, density=density, format='csc', random_state=seed)
+        # Make it symmetric and PSD: Q = A^T * A + 0.1 * I
+        Q = A.T @ A
+        Q = Q + 0.1 * sp.eye(n, format='csc')
     
     # Create q
     q = np.random.randn(n)
