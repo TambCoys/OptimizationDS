@@ -153,7 +153,7 @@ def main():
         print(f"Solution x: {baseline_result['x']}")
         
         # Check feasibility
-        from final_code.helper.block_ops import apply_E
+        from helper.block_ops import apply_E
         Ex_baseline = apply_E(baseline_result['x'], blocks)
         print(f"Feasibility check: Ex = {Ex_baseline}")
         print(f"Non-negativity: min(x) = {np.min(baseline_result['x']):.6e}")
@@ -175,7 +175,7 @@ def main():
         print(f"Solution x: {scipy_result['x']}")
         
         # Check feasibility
-        from final_code.helper.block_ops import apply_E
+        from helper.block_ops import apply_E
         Ex_scipy = apply_E(scipy_result['x'], blocks)
         print(f"Feasibility check: Ex = {Ex_scipy}")
         print(f"Non-negativity: min(x) = {np.min(scipy_result['x']):.6e}")
