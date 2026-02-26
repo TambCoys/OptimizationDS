@@ -16,10 +16,11 @@ import numpy as np
 import time
 import sys
 import os
-from algo1_baseline_solver import ipm_simplex_qp
-from algo1_final_solver import FeasibleStartIPM
-from baseline_solvers import solve_baseline_cvxpy, solve_baseline_scipy
-from helper.block_ops import apply_E, create_example_problem
+from main.algo1_baseline_solver import ipm_simplex_qp
+from main.algo1_final_solver import FeasibleStartIPM
+from main.baseline_solvers import solve_baseline_cvxpy, solve_baseline_scipy
+from main.helper.block_ops import apply_E, create_example_problem
+from main.helper.formatting import format_seconds
 
 
 def compute_objective(Q, q, x):
@@ -64,17 +65,17 @@ def benchmark_solver(solver_func, Q, q, blocks, name, n_runs=1):
     
     # First run (for solution)
     try:
-        start_time = time.time()
+        start_time = time.perf_counter()
         result = solver_func(Q, q, blocks)
-        solve_time = time.time() - start_time
+        solve_time = time.perf_counter() - start_time
         
         # Additional runs for timing (if n_runs > 1)
         if n_runs > 1:
             times = [solve_time]
             for _ in range(n_runs - 1):
-                start_time = time.time()
+                start_time = time.perf_counter()
                 _ = solver_func(Q, q, blocks)
-                times.append(time.time() - start_time)
+                times.append(time.perf_counter() - start_time)
             solve_time = np.mean(times)
             solve_time_std = np.std(times)
         else:
@@ -139,9 +140,7 @@ def print_comparison_table(results):
             print(f"{r['name']:<25} {'ERROR':<15} {'-':<15} {'-':<10} {'-':<8} {'FAILED':<15}")
             continue
         
-        time_str = f"{r['solve_time']:.4f}"
-        if r['solve_time_std'] > 0:
-            time_str += f" ± {r['solve_time_std']:.4f}"
+        time_str = format_seconds(r['solve_time'])
         
         obj_str = f"{r['obj_value']:.6e}" if not np.isnan(r['obj_value']) else "N/A"
         feas_str = "✓" if r['feasible'] else "✗"
@@ -160,15 +159,17 @@ def print_comparison_table(results):
         print(f"\n{'='*100}")
         print("SPEEDUP COMPARISON (relative to baseline)")
         print(f"{'='*100}")
-        print(f"Baseline: {baseline['name']} ({baseline['solve_time']:.4f} s)\n")
+        print(f"Baseline: {baseline['name']} ({format_seconds(baseline['solve_time'])} s)\n")
         
+        min_time = 1e-12
+        baseline_time = max(baseline['solve_time'], min_time)
         for r in successful_results[1:]:
-            if r['solve_time'] > 0:
-                speedup = baseline['solve_time'] / r['solve_time']
-                if speedup > 1:
-                    print(f"  {r['name']:<25}: {speedup:.2f}x {'faster' if speedup > 1 else 'slower'}")
-                else:
-                    print(f"  {r['name']:<25}: {1/speedup:.2f}x slower")
+            run_time = max(r['solve_time'], min_time)
+            speedup = baseline_time / run_time
+            if speedup > 1:
+                print(f"  {r['name']:<25}: {speedup:.2f}x faster")
+            else:
+                print(f"  {r['name']:<25}: {1/speedup:.2f}x slower")
         
         # Accuracy comparison
         print(f"\n{'='*100}")

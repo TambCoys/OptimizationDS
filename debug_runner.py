@@ -8,67 +8,10 @@ import numpy as np
 import scipy.sparse
 import sys
 import time
-from algo1_final_solver import FeasibleStartIPM
-from baseline_solvers import solve_baseline_cvxpy, solve_baseline_scipy
-from helper.block_ops import create_example_problem
+from main.algo1_final_solver import FeasibleStartIPM
+from main.baseline_solvers import solve_baseline_cvxpy, solve_baseline_scipy
+from main.helper.block_ops import create_example_problem
 
-
-def load_problem_data(Q, q, blocks):
-    """
-    Load and validate problem data.
-    
-    Parameters:
-    -----------
-    Q : array-like or sparse matrix, shape (n, n)
-        Quadratic matrix (symmetric, Q >= 0).
-    q : array-like, shape (n,)
-        Linear term.
-    blocks : list of lists
-        blocks[k] contains indices in block k (0-indexed).
-    
-    Returns:
-    --------
-    Q : ndarray or sparse matrix
-        Validated Q matrix.
-    q : ndarray
-        Validated q vector.
-    blocks : list of lists
-        Validated blocks.
-    """
-    # Convert q to numpy array
-    q = np.asarray(q, dtype=float)
-    n = len(q)
-    
-    # Convert Q to numpy array or sparse matrix
-    if scipy.sparse.issparse(Q):
-        Q = Q.tocsr()  # Use CSR format
-        if Q.shape != (n, n):
-            raise ValueError(f"Q shape {Q.shape} does not match q length {n}")
-    else:
-        Q = np.asarray(Q, dtype=float)
-        if Q.shape != (n, n):
-            raise ValueError(f"Q shape {Q.shape} does not match q length {n}")
-        # Symmetrize if needed
-        if not np.allclose(Q, Q.T, atol=1e-10):
-            Q = (Q + Q.T) / 2
-    
-    # Validate blocks
-    all_indices = set()
-    for k, block in enumerate(blocks):
-        if len(block) == 0:
-            raise ValueError(f"Block {k} is empty")
-        for i in block:
-            if i < 0 or i >= n:
-                raise ValueError(f"Index {i} in block {k} is out of range [0, {n-1}]")
-            if i in all_indices:
-                raise ValueError(f"Index {i} appears in multiple blocks")
-            all_indices.add(i)
-    
-    if len(all_indices) != n:
-        missing = set(range(n)) - all_indices
-        raise ValueError(f"Missing indices: {missing}")
-    
-    return Q, q, blocks
 
 def print_summary(result):
     """
@@ -138,9 +81,6 @@ def main():
     print(f"Problem size: n = {len(q)}, |K| = {len(blocks)}")
     print(f"Blocks: {blocks}")
     
-    # Validate and load
-    Q, q, blocks = load_problem_data(Q, q, blocks)
-    
     # Solve with baseline solver first
     print("\n" + "=" * 70)
     print("BASELINE SOLVER (CVXPY)")
@@ -153,7 +93,7 @@ def main():
         print(f"Solution x: {baseline_result['x']}")
         
         # Check feasibility
-        from helper.block_ops import apply_E
+        from main.helper.block_ops import apply_E
         Ex_baseline = apply_E(baseline_result['x'], blocks)
         print(f"Feasibility check: Ex = {Ex_baseline}")
         print(f"Non-negativity: min(x) = {np.min(baseline_result['x']):.6e}")
@@ -175,7 +115,7 @@ def main():
         print(f"Solution x: {scipy_result['x']}")
         
         # Check feasibility
-        from helper.block_ops import apply_E
+        from main.helper.block_ops import apply_E
         Ex_scipy = apply_E(scipy_result['x'], blocks)
         print(f"Feasibility check: Ex = {Ex_scipy}")
         print(f"Non-negativity: min(x) = {np.min(scipy_result['x']):.6e}")

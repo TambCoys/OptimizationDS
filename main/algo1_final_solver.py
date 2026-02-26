@@ -8,8 +8,8 @@ import numpy as np
 import scipy.sparse
 import scipy.sparse.linalg
 from scipy.linalg import cho_factor, cho_solve, lu_factor, lu_solve
-from helper.block_ops import apply_E, apply_E_transpose, validate_blocks
-from helper.utils import fraction_to_boundary, norm_inf
+from main.helper.block_ops import apply_E, apply_E_transpose, validate_blocks
+from main.helper.utils import fraction_to_boundary, norm_inf
 
 
 class FeasibleStartIPM:
@@ -614,8 +614,9 @@ class FeasibleStartIPM:
             Edx = apply_E(d_x, self.blocks)
             print(f"    Newton step: ||d_x||={norm_inf(d_x):.6e}, ||d_y||={norm_inf(d_y):.6e}, ||d_z||={norm_inf(d_z):.6e}")
             print(f"    E*d_x (should be -r_P): {Edx}, -r_P: {-r_P}")
-            print(f"    min(z): {np.min(self.z):.6e}, min(d_z): {np.min(d_z):.6e}")
-            print(f"    Components where d_z < 0: {np.sum(d_z < 0)}/{len(d_z)}")
+            if self.z is not None and d_z is not None:
+                print(f"    min(z): {np.min(self.z):.6e}, min(d_z): {np.min(d_z):.6e}")
+                print(f"    Components where d_z < 0: {np.sum(d_z < 0)}/{len(d_z)}")
         
         # ==========================================
         # Step 2.4: Step-size selection
@@ -717,12 +718,12 @@ class FeasibleStartIPM:
                 print(f"  Final ||r_D||_inf = {history[-1]['norm_r_D']:.6e}")
         
         result = {
-            'x': self.x.copy(),
-            'y': self.y.copy(),
-            'z': self.z.copy(),
+            'x': self.x.copy() if self.x is not None else None,
+            'y': self.y.copy() if self.y is not None else None,
+            'z': self.z.copy() if self.z is not None else None,
             'mu': self.mu,
             'iter': len(history),
-            'converged': history[-1]['converged'],
+            'converged': history[-1]['converged'] if history else False,
             'history': history,
         }
         
