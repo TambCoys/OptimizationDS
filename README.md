@@ -20,7 +20,7 @@ where:
 ## Project Structure
 
 ```
-main/
+simplex_ipm/
   algo1_final_solver.py    # Final solver (FeasibleStartIPM) — H formulation, Cholesky
   algo1_baseline_solver.py # Baseline solver (BaselineIPM) — H formulation, np.linalg.solve
   baseline_solvers.py      # CVXPY and SciPy reference solvers
@@ -82,7 +82,7 @@ A simpler reference implementation of the same algorithm. Uses the H formulation
 ### Basic Usage
 
 ```python
-from main.algo1_final_solver import FeasibleStartIPM
+from simplex_ipm.algo1_final_solver import FeasibleStartIPM
 
 solver = FeasibleStartIPM(Q, q, blocks, cfg={'sigma': 0.1, 'verbosity': 2})
 result = solver.solve()
@@ -95,7 +95,7 @@ z = result['z']   # dual slack
 ### Example Problem Generation
 
 ```python
-from main.helper.block_ops import create_example_problem
+from simplex_ipm.helper.block_ops import create_example_problem
 
 # Dense, n=500, 50 blocks
 Q, q, blocks = create_example_problem(n=500, n_blocks=50, seed=42, density=1.0)
@@ -141,22 +141,9 @@ The suite includes:
 - **Scaling tests** (n = 50, 100, 500, 1000, 2000) — how the solver scales with problem size
 - **Sparsity tests** (density = 1.0, 0.5, 0.1, 0.01 at n=1000) — dense vs sparse performance
 - **Block structure tests** (|K| = 2, 10, 50, 100, 250 at n=500) — effect of block count
+- **Large sparse tests** (n = 5000, 10000 with density = 0.01, 0.001) — tests the sparse H path for large-scale problems
 
 At the end, prints a compact summary table comparing CVXPY vs Final Solver across all configurations.
-
-## Mathematical Details
-
-See `feedback2.tex` for the full theoretical specification. Key points:
-
-1. **Initialization (δ-rule)**: Uniform primal x⁰_i = 1/|I_k|, adaptive δ per block ensuring z⁰ > 0.
-
-2. **Newton system**: Eliminates Δz from the KKT system to get (Q + X⁻¹Z)Δx + E^T Δy = rhs, then uses the Schur complement S = E H⁻¹ E^T to solve for Δy first.
-
-3. **H formulation**: H = Q + X⁻¹Z is symmetric positive-definite → Cholesky factorization. The alternative M = Z + XQ is used only for the invertibility proof (M is not symmetric).
-
-4. **Step size**: Fraction-to-boundary rule with safety factor γ = 0.99.
-
-5. **Convergence**: ‖r_P‖∞ ≤ ε_feas, ‖r_D‖∞ ≤ ε_feas, μ ≤ ε_comp.
 
 ## Dependencies
 
