@@ -39,9 +39,9 @@ def solve_baseline_cvxpy(Q, q, blocks):
     if not CVXPY_AVAILABLE:
         raise ImportError("CVXPY not available")
     
-    Q = np.asarray(Q, dtype=float)
     if scipy.sparse.issparse(Q):
-        Q = Q.toarray() # type: ignore
+        Q = Q.toarray()
+    Q = np.asarray(Q, dtype=float)
     
     # Symmetrize if needed
     if not np.allclose(Q, Q.T):
@@ -109,9 +109,9 @@ def solve_baseline_scipy(Q, q, blocks):
     """
     from scipy.optimize import minimize
 
-    Q = np.asarray(Q, dtype=float)
     if scipy.sparse.issparse(Q):
-        Q = Q.toarray() # type: ignore
+        Q = Q.toarray()
+    Q = np.asarray(Q, dtype=float)
     
     # Symmetrize if needed
     if not np.allclose(Q, Q.T):

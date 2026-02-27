@@ -12,29 +12,19 @@ from simplex_ipm.helper.benchmark import (
 def main():
     parser = argparse.ArgumentParser(
         description='Benchmark Algorithm 1 vs Baseline solvers')
-    parser.add_argument('--n', type=int, default=20,
-                        help='Problem size (default: 20)')
-    parser.add_argument('--n-blocks', type=int, default=3,
-                        help='Number of blocks (default: 3)')
-    parser.add_argument('--density', type=float, default=1.0,
-                        help='Density of Q matrix (1.0=dense, <1.0=sparse)')
-    parser.add_argument('--n-runs', type=int, default=1,
-                        help='Number of runs for timing (default: 1)')
-    parser.add_argument('--seed', type=int, default=42,
-                        help='Random seed (default: 42)')
-    parser.add_argument('--sigma', type=float, default=0.1,
-                        help='Centering parameter (default: 0.1)')
-    parser.add_argument('--max-iter', type=int, default=200,
-                        help='Max iterations (default: 200)')
-    parser.add_argument('--verbosity', type=int, default=0,
-                        help='Verbosity level (default: 0)')
-    parser.add_argument('--debug', action='store_true',
-                        help='Print detailed solution statistics')
-    parser.add_argument('--suite', action='store_true',
-                        help='Run full benchmark suite '
-                             '(ignores --n, --n-blocks, --density)')
+    parser.add_argument('--n', type=int, default=20,help='Problem size (default: 20)')
+    parser.add_argument('--n-blocks', type=int, default=3,help='Number of blocks (default: 3)')
+    parser.add_argument('--density', type=float, default=1.0,help='Density of Q matrix (1.0=dense, <1.0=sparse)')
+    parser.add_argument('--n-runs', type=int, default=1,help='Number of runs for timing (default: 1)')
+    parser.add_argument('--seed', type=int, default=42,help='Random seed (default: 42)')
+    parser.add_argument('--sigma', type=float, default=0.1,help='Centering parameter (default: 0.1)')
+    parser.add_argument('--max-iter', type=int, default=200,help='Max iterations (default: 200)')
+    parser.add_argument('--verbosity', type=int, default=0,help='Verbosity level (default: 0)')
+    parser.add_argument('--debug', action='store_true',help='Print detailed solution statistics')
+    parser.add_argument('--suite', action='store_true',help='Run full benchmark suite ''(ignores --n, --n-blocks, --density)')
     args = parser.parse_args()
 
+    # ---- Debug mode ----
     if args.debug and args.verbosity == 0:
         args.verbosity = 3
 

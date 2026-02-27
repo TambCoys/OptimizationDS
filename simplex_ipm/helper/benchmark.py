@@ -63,9 +63,10 @@ def generate_benchmark_suite(seed=42):
     Returns a list of dicts with keys: name, n, n_blocks, density, seed.
 
     Axes covered:
-      - Scaling:   vary n with fixed density=1.0
-      - Sparsity:  vary density with fixed n=1000
+      - Scaling:       vary n with fixed density=1.0
+      - Sparsity:      vary density with fixed n=1000
       - Block structure: vary n_blocks with fixed n=500
+      - Large sparse:  high n + low density (tests sparse H path)
     """
     suite = []
 
@@ -81,7 +82,7 @@ def generate_benchmark_suite(seed=42):
 
     for density in [1.0, 0.5, 0.1, 0.01]:
         suite.append({
-            'name': f'sparse_d{density}',
+            'name': f'sparse_{int(density*100)}pct',
             'n': 1000,
             'n_blocks': 50,
             'density': density,
@@ -94,6 +95,18 @@ def generate_benchmark_suite(seed=42):
             'n': 500,
             'n_blocks': n_blocks,
             'density': 1.0,
+            'seed': seed,
+        })
+
+    # Large sparse: high n where splu on H should outperform dense Cholesky
+    for n, density in [(5000, 0.01), (5000, 0.001), (10000, 0.01), (10000, 0.001)]:
+        n_blocks = max(2, n // 50)
+        pct = f'{density*100:.1f}'.rstrip('0').rstrip('.')
+        suite.append({
+            'name': f'lg_n{n}_d{pct}pct',
+            'n': n,
+            'n_blocks': n_blocks,
+            'density': density,
             'seed': seed,
         })
 
@@ -341,6 +354,35 @@ def run_single_benchmark(Q, q, blocks, sigma, max_iter, verbosity,
     return results
 
 
+def run_suite_benchmark(Q, q, blocks, sigma, max_iter, verbosity,
+                        n_runs, debug):
+    """Run only CVXPY + Final solver (skip SciPy and Baseline which are too slow at high n)."""
+
+    def solve_final(Q, q, blocks):
+        cfg = {
+            'sigma': sigma,
+            'max_iter': max_iter,
+            'eps_feas': 1e-8,
+            'eps_comp': 1e-8,
+            'verbosity': verbosity,
+        }
+        return FeasibleStartIPM(Q, q, blocks, cfg=cfg).solve()
+
+    results = [
+        benchmark_solver(solve_baseline_cvxpy, Q, q, blocks,
+                         "Baseline (CVXPY)", n_runs=n_runs),
+        benchmark_solver(solve_final, Q, q, blocks,
+                         "Algorithm 1 (Final)", n_runs=n_runs),
+    ]
+
+    if debug:
+        for r in results:
+            if r['success']:
+                print_debug_summary(r, r['name'])
+
+    return results
+
+
 def run_suite(sigma, max_iter, verbosity, n_runs, debug, seed):
     """
     Run the full benchmark suite and print a compact summary at the end.
@@ -351,7 +393,7 @@ def run_suite(sigma, max_iter, verbosity, n_runs, debug, seed):
     print("BENCHMARK SUITE")
     print("=" * 100)
     print(f"  {len(suite)} problem configurations  |  seed = {seed}")
-    print(f"  Solvers: CVXPY, SciPy, Final, Baseline")
+    print(f"  Solvers: CVXPY, Final")
     print("=" * 100)
 
     summary_rows = []
@@ -363,14 +405,14 @@ def run_suite(sigma, max_iter, verbosity, n_runs, debug, seed):
         density = cfg['density']
 
         print(f"\n{'#'*100}")
-        print(f"  [{i}/{len(suite)}]  {name}  |  n={n}  |K|={n_blocks}  "
+        print(f"  [{i}/{len(suite)}]  n={n}  |K|={n_blocks}  "
               f"density={density}")
         print(f"{'#'*100}")
 
         Q, q, blocks = create_example_problem(
             n=n, n_blocks=n_blocks, seed=cfg['seed'], density=density)
 
-        results = run_single_benchmark(
+        results = run_suite_benchmark(
             Q, q, blocks,
             sigma=sigma, max_iter=max_iter,
             verbosity=verbosity, n_runs=n_runs, debug=debug,

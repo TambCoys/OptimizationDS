@@ -153,13 +153,11 @@ def create_example_problem(n=10, n_blocks=3, seed=42, density=1.0):
         # Dense Q
         Q = np.random.randn(n, n)
         Q = Q.T @ Q  # Make it PSD
-        Q = Q + 0.1 * np.eye(n)  # Make it strictly positive definite
+        Q = Q + 0.1 * np.eye(n)
     else:
         # Sparse Q
-        # Generate a random sparse matrix
-        A = sp.random(n, n, density=density, format='csc', random_state=seed)
-        # Make it symmetric and PSD: Q = A^T * A + 0.1 * I
-        Q = A.T @ A
+        A = sp.random(n, n, density=density, format='csc', random_state=seed) # type: ignore
+        Q = A.T @ A # Make it PSD
         Q = Q + 0.1 * sp.eye(n, format='csc')
     
     # Create q

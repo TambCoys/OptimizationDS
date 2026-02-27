@@ -427,7 +427,7 @@ class FeasibleStartIPM:
                     dtype=float
                 ),
                 b,
-                tol=self.cfg['pcg_tol'],
+                rtol=self.cfg['pcg_tol'],
                 maxiter=self.cfg['pcg_maxit'],
                 M=M_precond
             )
