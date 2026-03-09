@@ -12,14 +12,40 @@ Provides:
 """
 
 import numpy as np
+import scipy.sparse as sp
 import time
 import traceback
 
-from simplex_ipm.algo1_baseline_solver import BaselineIPM
-from simplex_ipm.algo1_final_solver import FeasibleStartIPM
+from simplex_ipm.solver import SimplifiedIPM
 from simplex_ipm.baseline_solvers import solve_baseline_cvxpy, solve_baseline_scipy
 from simplex_ipm.helper.utils import norm_inf
-from simplex_ipm.helper.block_ops import create_example_problem, apply_E
+
+
+def create_example_problem(n=10, n_blocks=3, seed=42, density=1.0):
+    """
+    Create a randomly generated example problem with a block partition.
+
+    Returns (Q, q, blocks) where Q is PSD (dense or sparse), q is a random
+    vector, and blocks is a disjoint partition of {0, ..., n-1}.
+    """
+    np.random.seed(seed)
+
+    block_size = n // n_blocks
+    blocks = []
+    for k in range(n_blocks):
+        start = k * block_size
+        end = n if k == n_blocks - 1 else (k + 1) * block_size
+        blocks.append(list(range(start, end)))
+
+    if density >= 1.0:
+        Q = np.random.randn(n, n)
+        Q = Q.T @ Q + 0.1 * np.eye(n)
+    else:
+        A = sp.random(n, n, density=density, format='csc', random_state=seed)
+        Q = A.T @ A + 0.1 * sp.eye(n, format='csc')
+
+    q = np.random.randn(n)
+    return Q, q, blocks
 
 
 # ---------------------------------------------------------------------------
@@ -46,7 +72,7 @@ def compute_objective(Q, q, x):
 
 def check_feasibility(x, blocks, tol=1e-6):
     """Check if x satisfies Ex = 1 and x >= 0."""
-    Ex = apply_E(x, blocks)
+    Ex = np.array([np.sum(x[blk]) for blk in blocks])
     primal_feas = np.allclose(Ex, 1.0, atol=tol)
     nonneg = np.all(x >= -tol)
     return primal_feas and nonneg, Ex
@@ -314,9 +340,9 @@ def print_comparison_table(results):
 
 def run_single_benchmark(Q, q, blocks, sigma, max_iter, verbosity,
                          n_runs, debug):
-    """Run all 4 solvers on one problem instance and return results list."""
+    """Run all solvers on one problem instance and return results list."""
 
-    def solve_final(Q, q, blocks):
+    def solve_ipm(Q, q, blocks):
         cfg = {
             'sigma': sigma,
             'max_iter': max_iter,
@@ -324,26 +350,15 @@ def run_single_benchmark(Q, q, blocks, sigma, max_iter, verbosity,
             'eps_comp': 1e-8,
             'verbosity': verbosity,
         }
-        return FeasibleStartIPM(Q, q, blocks, cfg=cfg).solve()
-
-    def solve_baseline(Q, q, blocks):
-        cfg = {
-            'sigma': sigma,
-            'max_iter': max_iter,
-            'eps_feas': 1e-8,
-            'eps_comp': 1e-8,
-        }
-        return BaselineIPM(Q, q, blocks, cfg=cfg).solve()
+        return SimplifiedIPM(Q, q, blocks, cfg=cfg).solve()
 
     results = [
         benchmark_solver(solve_baseline_cvxpy, Q, q, blocks,
                          "Baseline (CVXPY)", n_runs=n_runs),
         benchmark_solver(solve_baseline_scipy, Q, q, blocks,
                          "Baseline (SciPy)", n_runs=n_runs),
-        benchmark_solver(solve_final, Q, q, blocks,
-                         "Algorithm 1 (Final)", n_runs=n_runs),
-        benchmark_solver(solve_baseline, Q, q, blocks,
-                         "Algorithm 1 (baseline)", n_runs=n_runs),
+        benchmark_solver(solve_ipm, Q, q, blocks,
+                         "Algorithm 1 (IPM)", n_runs=n_runs),
     ]
 
     if debug:
@@ -356,9 +371,9 @@ def run_single_benchmark(Q, q, blocks, sigma, max_iter, verbosity,
 
 def run_suite_benchmark(Q, q, blocks, sigma, max_iter, verbosity,
                         n_runs, debug):
-    """Run only CVXPY + Final solver (skip SciPy and Baseline which are too slow at high n)."""
+    """Run CVXPY + IPM solver (skip SciPy which is too slow at high n)."""
 
-    def solve_final(Q, q, blocks):
+    def solve_ipm(Q, q, blocks):
         cfg = {
             'sigma': sigma,
             'max_iter': max_iter,
@@ -366,13 +381,13 @@ def run_suite_benchmark(Q, q, blocks, sigma, max_iter, verbosity,
             'eps_comp': 1e-8,
             'verbosity': verbosity,
         }
-        return FeasibleStartIPM(Q, q, blocks, cfg=cfg).solve()
+        return SimplifiedIPM(Q, q, blocks, cfg=cfg).solve()
 
     results = [
         benchmark_solver(solve_baseline_cvxpy, Q, q, blocks,
                          "Baseline (CVXPY)", n_runs=n_runs),
-        benchmark_solver(solve_final, Q, q, blocks,
-                         "Algorithm 1 (Final)", n_runs=n_runs),
+        benchmark_solver(solve_ipm, Q, q, blocks,
+                         "Algorithm 1 (IPM)", n_runs=n_runs),
     ]
 
     if debug:
@@ -393,7 +408,7 @@ def run_suite(sigma, max_iter, verbosity, n_runs, debug, seed):
     print("BENCHMARK SUITE")
     print("=" * 100)
     print(f"  {len(suite)} problem configurations  |  seed = {seed}")
-    print(f"  Solvers: CVXPY, Final")
+    print(f"  Solvers: CVXPY, IPM")
     print("=" * 100)
 
     summary_rows = []
@@ -426,30 +441,30 @@ def run_suite(sigma, max_iter, verbosity, n_runs, debug, seed):
             return None
 
         r_cvxpy = _get("Baseline (CVXPY)")
-        r_final = _get("Algorithm 1 (Final)")
+        r_ipm = _get("Algorithm 1 (IPM)")
 
         cvxpy_t = r_cvxpy['solve_time'] if r_cvxpy else float('nan')
-        final_t = r_final['solve_time'] if r_final else float('nan')
-        ratio = (cvxpy_t / max(final_t, 1e-15)
-                 if r_cvxpy and r_final else float('nan'))
+        ipm_t = r_ipm['solve_time'] if r_ipm else float('nan')
+        ratio = (cvxpy_t / max(ipm_t, 1e-15)
+                 if r_cvxpy and r_ipm else float('nan'))
 
         obj_match = ""
-        if r_cvxpy and r_final:
-            diff = abs(r_cvxpy['obj_value'] - r_final['obj_value'])
+        if r_cvxpy and r_ipm:
+            diff = abs(r_cvxpy['obj_value'] - r_ipm['obj_value'])
             rel = diff / max(abs(r_cvxpy['obj_value']), 1e-15)
             obj_match = f"{rel:.2e}"
 
         summary_rows.append((
-            name, n, n_blocks, density, cvxpy_t, final_t, ratio,
-            obj_match, r_final['converged'] if r_final else False,
+            name, n, n_blocks, density, cvxpy_t, ipm_t, ratio,
+            obj_match, r_ipm['converged'] if r_ipm else False,
         ))
 
     # Final compact summary
     print(f"\n\n{'='*110}")
-    print("SUITE SUMMARY: CVXPY vs Algorithm 1 (Final)")
+    print("SUITE SUMMARY: CVXPY vs Algorithm 1 (IPM)")
     print(f"{'='*110}")
     print(f"{'Problem':<18} {'n':>6} {'|K|':>5} {'dens':>5}  "
-          f"{'CVXPY (s)':>12} {'Final (s)':>12} {'Ratio':>8}  "
+          f"{'CVXPY (s)':>12} {'IPM (s)':>12} {'Ratio':>8}  "
           f"{'Obj rel err':>12}  {'Conv':>5}")
     print("-" * 110)
     for (name, n, K, density, ct, ft, ratio, obj_m, conv) in summary_rows:
@@ -466,7 +481,7 @@ def run_suite(sigma, max_iter, verbosity, n_runs, debug, seed):
               f"{ct_s:>12} {ft_s:>12} {ratio_s:>8}  "
               f"{obj_m:>12}  {conv_s:>5}")
     print("-" * 110)
-    print("Ratio: \u2191 = Final faster than CVXPY, "
-          "\u2193 = Final slower\n")
+    print("Ratio: \u2191 = IPM faster than CVXPY, "
+          "\u2193 = IPM slower\n")
 
 
