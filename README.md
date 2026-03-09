@@ -1,90 +1,69 @@
 # Project 34: QP Solver on Cartesian Product of Simplices
 
-Implementation of Algorithm 1: Feasible-Start, Fixed σ Interior Point Method for solving convex QP problems on a Cartesian product of simplices.
+Feasible-start primal–dual interior-point method for convex QP on a Cartesian product of simplices.
 
-## Problem Formulation
-
-Solve:
+## Problem
 
 ```
 min  (1/2) x^T Q x + q^T x
 s.t. Ex = 1,  x >= 0
 ```
 
-where:
-
-- Q is a symmetric positive semidefinite matrix
-- Blocks {I_k} partition indices (simplex constraint per block)
-- E is the block-sum operator (never formed explicitly)
+- Q ∈ ℝⁿˣⁿ symmetric positive semidefinite
+- Blocks {I_k} partition {1,…,n} (one simplex constraint per block)
+- E ∈ ℝ^{|K|×n} block-summation matrix (built as sparse csr_matrix)
 
 ## Project Structure
 
 ```
 simplex_ipm/
-  algo1_final_solver.py    # Final solver (FeasibleStartIPM) — H formulation, Cholesky
-  algo1_baseline_solver.py # Baseline solver (BaselineIPM) — H formulation, np.linalg.solve
-  baseline_solvers.py      # CVXPY and SciPy reference solvers
+  solver.py              # SimplifiedIPM — H formulation, sparse E, Cholesky
+  baseline_solvers.py    # CVXPY (OSQP) reference solver
   helper/
-    block_ops.py           # Block operators (apply_E, apply_E^T), example problem generator
-    benchmark.py           # Benchmark helpers (timing, feasibility, suite generator)
-    utils.py               # Numerics helpers (fraction-to-boundary, norms)
-benchmark_runner.py        # CLI benchmark script (single problem or full suite)
-feedback2.tex              # Paper / theoretical specification
-explanation/               # Detailed markdown explanations of each module
-changes/                   # Changelog for major refactors
+    benchmark.py         # Benchmark suite, problem generator, timing
+    utils.py             # norm_inf helper
+benchmark_runner.py      # CLI entrypoint (single problem or full suite)
+test_convergence.py      # Quick convergence check across all configs
+simplified.tex           # Report (theory + experiments)
+explanation/             # Detailed markdown explanations
+changes/                 # Changelog
 ```
 
-## Solvers
+## Solver
 
-### Final Solver (`algo1_final_solver.py` — `FeasibleStartIPM`)
+### `SimplifiedIPM` (`solver.py`)
 
-The production solver. Uses the symmetric **H formulation** (H = Q + X⁻¹Z) with Cholesky factorization, operator-form Schur complement, and automatic dense/sparse dispatch.
+Single-class solver. Uses the symmetric **H = Q + X⁻¹Z** formulation with:
+- Sparse E matrix (`scipy.sparse.csr_matrix`)
+- Schur complement S = E H⁻¹ Eᵀ assembled column-by-column
+- Cholesky factorization (dense Q) or SparseLU (sparse Q)
+- Fixed regularisation τ = 1e-8
+- Fraction-to-boundary step sizing (γ = 0.99)
 
-**Configuration parameters:**
+**Configuration:**
 
 | Parameter | Default | Description |
 |---|---|---|
-| `sigma` | 0.1 | Centering parameter σ ∈ (0, 0.5). Lower = more aggressive |
+| `sigma` | 0.1 | Centering parameter σ ∈ (0, 0.5) |
 | `max_iter` | 100 | Maximum IPM iterations |
 | `eps_feas` | 1e-8 | Feasibility tolerance (‖r_P‖∞, ‖r_D‖∞) |
 | `eps_comp` | 1e-8 | Complementarity tolerance (μ) |
 | `eps_delta` | 1e-8 | Minimum δ for initialization |
 | `tau_delta` | 1e-2 | δ scaling factor for range-based rule |
-| `tau_reg` | None | Regularization: None = adaptive, or fixed float |
-| `K_th` | 200 | Block count threshold: ≤K_th assembles Schur, >K_th uses PCG |
-| `pcg_tol` | 1e-10 | PCG solver tolerance (when |K| > K_th) |
-| `pcg_maxit` | 1000 | PCG max iterations |
-| `verbosity` | 1 | 0=silent, 1=summary, 2=per-iter, 3=debug |
+| `tau_reg` | 1e-8 | Fixed regularisation of H |
 | `gamma` | 0.99 | Fraction-to-boundary safety factor |
+| `verbosity` | 1 | 0=silent, 1=summary, 2=per-iteration |
 
-### Baseline Solver (`algo1_baseline_solver.py` — `BaselineIPM`)
+### Reference Solver (`baseline_solvers.py`)
 
-A simpler reference implementation of the same algorithm. Uses the H formulation with `np.linalg.solve` (no Cholesky), explicitly forms the full E matrix, and assembles the Schur complement directly. Meant for validation, not performance.
-
-**Configuration parameters:**
-
-| Parameter | Default | Description |
-|---|---|---|
-| `sigma` | 0.01 | Centering parameter (more conservative default than final) |
-| `max_iter` | 100000 | Maximum iterations (very high to ensure convergence) |
-| `eps_feas` | 1e-8 | Feasibility tolerance |
-| `eps_comp` | 1e-8 | Complementarity tolerance |
-| `eps` | 1e-10 | Minimum ε for δ-rule |
-| `tau` | 1e-3 | δ scaling factor |
-
-### Reference Solvers (`baseline_solvers.py`)
-
-- **CVXPY** — Calls OSQP (compiled C solver) via CVXPY. Used as the performance baseline.
-- **SciPy** — Uses `scipy.optimize.minimize` with SLSQP. Very slow for QPs; included for completeness.
+CVXPY with OSQP backend. Used as the accuracy and performance baseline.
 
 ## Usage
 
-### Basic Usage
-
 ```python
-from simplex_ipm.algo1_final_solver import FeasibleStartIPM
+from simplex_ipm import SimplifiedIPM
 
-solver = FeasibleStartIPM(Q, q, blocks, cfg={'sigma': 0.1, 'verbosity': 2})
+solver = SimplifiedIPM(Q, q, blocks, cfg={'sigma': 0.1, 'verbosity': 2})
 result = solver.solve()
 
 x = result['x']   # primal solution
@@ -92,26 +71,27 @@ y = result['y']   # dual variables (per-block)
 z = result['z']   # dual slack
 ```
 
-### Example Problem Generation
+### Problem Generation
 
 ```python
-from simplex_ipm.helper.block_ops import create_example_problem
+from simplex_ipm.helper.benchmark import create_example_problem
 
-# Dense, n=500, 50 blocks
 Q, q, blocks = create_example_problem(n=500, n_blocks=50, seed=42, density=1.0)
-
-# Sparse, n=1000, 5% density
 Q, q, blocks = create_example_problem(n=1000, n_blocks=50, seed=42, density=0.05)
 ```
 
 ## Benchmarking
 
-### Single Problem
-
 ```bash
+# Full suite (18 configs)
+uv run benchmark_runner.py --suite --seed 42
+
+# Single problem
 uv run benchmark_runner.py --n 500 --n-blocks 50
 uv run benchmark_runner.py --n 1000 --n-blocks 100 --density 0.1
-uv run benchmark_runner.py --n 100 --n-blocks 10 --debug
+
+# Quick convergence check
+uv run test_convergence.py
 ```
 
 **CLI flags:**
@@ -121,37 +101,25 @@ uv run benchmark_runner.py --n 100 --n-blocks 10 --debug
 | `--n` | 20 | Problem size |
 | `--n-blocks` | 3 | Number of simplex blocks |
 | `--density` | 1.0 | Q matrix density (1.0=dense, <1.0=sparse) |
-| `--n-runs` | 1 | Number of timing runs (for averaging) |
 | `--seed` | 42 | Random seed |
-| `--sigma` | 0.1 | Centering parameter for Algorithm 1 |
-| `--max-iter` | 200 | Max iterations for Algorithm 1 |
+| `--sigma` | 0.1 | Centering parameter |
+| `--max-iter` | 200 | Max iterations |
 | `--verbosity` | 0 | Verbosity level |
 | `--debug` | off | Print detailed solution statistics |
-| `--suite` | off | Run the full benchmark suite (see below) |
+| `--suite` | off | Run full benchmark suite |
 
-### Benchmark Suite
+### Suite Axes
 
-Runs a systematic grid of problems covering three axes:
-
-```bash
-uv run benchmark_runner.py --suite
-```
-
-The suite includes:
-- **Scaling tests** (n = 50, 100, 500, 1000, 2000) — how the solver scales with problem size
-- **Sparsity tests** (density = 1.0, 0.5, 0.1, 0.01 at n=1000) — dense vs sparse performance
-- **Block structure tests** (|K| = 2, 10, 50, 100, 250 at n=500) — effect of block count
-- **Large sparse tests** (n = 5000, 10000 with density = 0.01, 0.001) — tests the sparse H path for large-scale problems
-
-At the end, prints a compact summary table comparing CVXPY vs Final Solver across all configurations.
+- **Scaling** (n = 50, 100, 500, 1000, 2000)
+- **Sparsity** (density = 1.0, 0.5, 0.1, 0.01 at n=1000)
+- **Block count** (|K| = 2, 10, 50, 100, 250 at n=500)
+- **Large sparse** (n = 5000, 10000 with density = 0.01, 0.001)
 
 ## Dependencies
 
-- numpy >= 1.20.0
-- scipy >= 1.7.0
-- cvxpy (for baseline comparison)
-
-Install with:
+- numpy ≥ 1.20
+- scipy ≥ 1.7
+- cvxpy (baseline comparison)
 
 ```bash
 pip install -r requirements.txt
