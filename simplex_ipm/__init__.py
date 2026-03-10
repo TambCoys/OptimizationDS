@@ -1,3 +1,3 @@
-from simplex_ipm.solver import SimplifiedIPM
+from simplex_ipm.solver import IPM
 
-__all__ = ["SimplifiedIPM"]
+__all__ = ["IPM"]

@@ -9,11 +9,10 @@ where E is the block-summation matrix (one row per simplex constraint).
 
 import numpy as np
 import scipy.sparse as sp
-import scipy.sparse.linalg
 from scipy.linalg import cho_factor, cho_solve
 
 
-class SimplifiedIPM:
+class IPM:
     """
     Feasible-start primal-dual IPM for QP on Cartesian product of simplices.
 
@@ -155,7 +154,7 @@ class SimplifiedIPM:
         verb = cfg['verbosity']
 
         if verb >= 1:
-            print(f"SimplifiedIPM  n={self.n}  |K|={self.K}  "
+            print(f"IPM  n={self.n}  |K|={self.K}  "
                   f"σ={cfg['sigma']}  μ₀={mu:.2e}")
         if verb >= 2:
             print(f"{'it':>4} {'mu':>10} {'‖rP‖':>10} {'‖rD‖':>10} "
@@ -211,7 +210,7 @@ class SimplifiedIPM:
                 Etej = np.asarray(self.E.T @ e_j).ravel()
                 S[:, j] = np.asarray(self.E @ H_solve(Etej)).ravel()
 
-            b = np.asarray(self.E @ H_inv_rhs).ravel() + r_P      # note: +r_P (sign matches derivation)
+            b = r_P - np.asarray(self.E @ H_inv_rhs).ravel()
 
             # ---- solve for Δy ----
             try:

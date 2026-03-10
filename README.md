@@ -17,7 +17,7 @@ s.t. Ex = 1,  x >= 0
 
 ```
 simplex_ipm/
-  solver.py              # SimplifiedIPM — H formulation, sparse E, Cholesky
+  solver.py              # IPM — H formulation, sparse E, Cholesky
   baseline_solvers.py    # CVXPY (OSQP) reference solver
   helper/
     benchmark.py         # Benchmark suite, problem generator, timing
@@ -31,7 +31,7 @@ changes/                 # Changelog
 
 ## Solver
 
-### `SimplifiedIPM` (`solver.py`)
+### `IPM` (`solver.py`)
 
 Single-class solver. Uses the symmetric **H = Q + X⁻¹Z** formulation with:
 - Sparse E matrix (`scipy.sparse.csr_matrix`)
@@ -61,9 +61,9 @@ CVXPY with OSQP backend. Used as the accuracy and performance baseline.
 ## Usage
 
 ```python
-from simplex_ipm import SimplifiedIPM
+from simplex_ipm import IPM
 
-solver = SimplifiedIPM(Q, q, blocks, cfg={'sigma': 0.1, 'verbosity': 2})
+solver = IPM(Q, q, blocks, cfg={'sigma': 0.1, 'verbosity': 2})
 result = solver.solve()
 
 x = result['x']   # primal solution
