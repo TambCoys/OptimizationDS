@@ -23,7 +23,7 @@ from simplex_ipm.helper.baseline_solvers import solve_baseline_cvxpy, solve_base
 
 def create_example_problem(n=10, n_blocks=3, seed=42, density=1.0):
     """Return (Q, q, blocks) for a random QP on a product of simplices."""
-    np.random.seed(seed)
+    rng = np.random.default_rng(seed)
 
     block_size = n // n_blocks
     blocks = [list(range(k * block_size,
@@ -31,14 +31,14 @@ def create_example_problem(n=10, n_blocks=3, seed=42, density=1.0):
               for k in range(n_blocks)]
 
     if density >= 1.0:
-        A = np.random.randn(n, n)
+        A = rng.standard_normal((n, n))
         Q = A.T @ A + 0.1 * np.eye(n)
     else:
         A = sp.random(n, n, density=density, format='csc',
-                      random_state=seed)  # type: ignore
+                      random_state=seed)
         Q = A.T @ A + 0.1 * sp.eye(n, format='csc')
 
-    q = np.random.randn(n)
+    q = rng.standard_normal(n)
     return Q, q, blocks
 
 

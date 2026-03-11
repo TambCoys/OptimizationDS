@@ -165,10 +165,10 @@ class IPM:
         for it in range(1, cfg['max_iter'] + 1):
             # ---- residuals ----
             Qx = self.Q.dot(x) if self.is_sparse else self.Q @ x
-            r_D = Qx + self.q + self.E.T @ y - z          # dual
-            r_P = np.asarray(self.E @ x).ravel() - 1.0     # primal
+            r_D = Qx + self.q + self.E.T @ y - z # dual
+            r_P = np.asarray(self.E @ x).ravel() - 1.0 # primal
             mu_target = cfg['sigma'] * mu
-            r_C = x * z - mu_target                         # complementarity
+            r_C = x * z - mu_target # complementarity
 
             nr_P = np.max(np.abs(r_P))
             nr_D = np.max(np.abs(r_D))
@@ -226,9 +226,11 @@ class IPM:
             dz = (self.Q.dot(dx) if self.is_sparse else self.Q @ dx) + Etdy + r_D
 
             # ---- step sizes ----
+            # Separate primal/dual step sizes are computed for logging;
+            # the update uses the conservative min(α_p, α_d).
             a_p, a_d, alpha = self._step_sizes(x, dx, z, dz, cfg['gamma'])
 
-            # ---- update ----
+            # ---- update (single step length) ----
             x = x + alpha * dx
             y = y + alpha * dy
             z = z + alpha * dz

@@ -5,7 +5,6 @@ Solves the same problem: min (1/2) x^T Q x + q^T x  s.t.  Ex = 1, x >= 0
 
 import numpy as np
 import scipy.sparse
-import time
 
 try:
     import cvxpy as cp
@@ -21,9 +20,10 @@ def solve_baseline_cvxpy(Q, q, blocks):
         raise ImportError("CVXPY not available")
 
     if scipy.sparse.issparse(Q):
-        Q = Q.toarray()
-    Q = np.asarray(Q, dtype=float)
-    if not np.allclose(Q, Q.T):
+        Q = Q.tocsc()
+    else:
+        Q = np.asarray(Q, dtype=float)
+    if not np.allclose(Q, Q.T) if isinstance(Q, np.ndarray) else (Q - Q.T).nnz > 0:
         Q = (Q + Q.T) / 2
 
     n = len(q)
