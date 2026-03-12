@@ -1,14 +1,3 @@
-"""
-Benchmark: compare the IPM solver against CVXPY (OSQP) on random QPs.
-
-Provides
---------
-  create_example_problem    random QP on a product of simplices
-  generate_benchmark_suite  systematic grid of test configs
-  run_benchmark             time CVXPY + IPM on one instance
-  run_suite                 run the full grid + print summary
-"""
-
 import numpy as np
 import scipy.sparse as sp
 import time
@@ -52,7 +41,9 @@ def compute_objective(Q, q, x):
 # ---------------------------------------------------------------------------
 
 def generate_benchmark_suite(seed=42):
-    """Build the systematic grid of test configurations."""
+    """
+    Build the systematic grid of test configurations.
+    """
     suite = []
 
     # Scaling axis
@@ -98,11 +89,8 @@ def _time_solver(solver_func, Q, q, blocks):
 
 
 def run_benchmark(Q, q, blocks, ipm_cfg=None, run_scipy=True):
-    """
-    Run CVXPY and IPM on one problem, optionally SciPy.
-
-    Returns (cvxpy_result, scipy_result, ipm_result) dicts with keys
-    time, obj, converged, iter (IPM only), x.
+    """ 
+    un CVXPY and IPM on one problem, optionally SciPy.
     """
     def solve_ipm(Q, q, blocks):
         return IPM(Q, q, blocks, cfg=ipm_cfg).solve()
@@ -119,7 +107,9 @@ def run_benchmark(Q, q, blocks, ipm_cfg=None, run_scipy=True):
 # ---------------------------------------------------------------------------
 
 def run_suite(seed=42, verbosity=0, **ipm_overrides):
-    """Run the full benchmark grid and print a compact summary."""
+    """
+    Run the full benchmark grid and print a compact summary.
+    """
     suite = generate_benchmark_suite(seed=seed)
     ipm_cfg = {'verbosity': verbosity}
     ipm_cfg.update(ipm_overrides)

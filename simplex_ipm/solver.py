@@ -1,12 +1,3 @@
-"""
-Feasible-Start Primal-Dual Interior-Point Method for QP on Cartesian Product of Simplices.
-
-Solves:  min  ½ xᵀQx + qᵀx
-         s.t. Ex = 1,  x ≥ 0
-
-where E is the block-summation matrix (one row per simplex constraint).
-"""
-
 import numpy as np
 import scipy.sparse as sp
 from scipy.linalg import cho_factor, cho_solve

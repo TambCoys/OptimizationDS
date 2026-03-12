@@ -1,24 +1,11 @@
-"""
-Baseline QP solvers using CVXPY and SciPy for comparison.
-Solves the same problem: min (1/2) x^T Q x + q^T x  s.t.  Ex = 1, x >= 0
-"""
-
 import numpy as np
 import scipy.sparse
-
-try:
-    import cvxpy as cp
-    CVXPY_AVAILABLE = True
-except ImportError:
-    CVXPY_AVAILABLE = False
-    print("Warning: CVXPY not available")
-
+import cvxpy as cp
 
 def solve_baseline_cvxpy(Q, q, blocks):
-    """Solve QP using CVXPY (OSQP, falling back to ECOS)."""
-    if not CVXPY_AVAILABLE:
-        raise ImportError("CVXPY not available")
-
+    """
+    Solve QP using CVXPY (OSQP, falling back to ECOS).
+    """
     if scipy.sparse.issparse(Q):
         Q = Q.tocsc()
     else:
@@ -44,7 +31,9 @@ def solve_baseline_cvxpy(Q, q, blocks):
 
 
 def solve_baseline_scipy(Q, q, blocks):
-    """Solve QP using scipy.optimize.minimize (SLSQP)."""
+    """
+    Solve QP using scipy (SLSQP).
+    """
     from scipy.optimize import minimize
 
     if scipy.sparse.issparse(Q):

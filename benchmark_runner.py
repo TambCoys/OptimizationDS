@@ -1,12 +1,9 @@
-"""Thin CLI entrypoint — all logic lives in simplex_ipm.helper.benchmark."""
+"""
+CLI entrypoint - all logic lives in simplex_ipm.helper.benchmark.
+"""
 
 import argparse
-from simplex_ipm.helper.benchmark import (
-    create_example_problem,
-    run_benchmark,
-    run_suite,
-)
-
+from simplex_ipm.helper.benchmark import create_example_problem, run_benchmark, run_suite
 
 def main():
     parser = argparse.ArgumentParser(
