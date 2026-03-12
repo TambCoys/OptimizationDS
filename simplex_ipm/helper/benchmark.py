@@ -24,7 +24,7 @@ def create_example_problem(n=10, n_blocks=3, seed=42, density=1.0):
         Q = A.T @ A + 0.1 * np.eye(n)
     else:
         A = sp.random(n, n, density=density, format='csc',
-                      random_state=seed)
+                      random_state=seed) #type: ignore
         Q = A.T @ A + 0.1 * sp.eye(n, format='csc')
 
     q = rng.standard_normal(n)
